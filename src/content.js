@@ -1,316 +1,466 @@
-// content.js
-// Injects the export toolbar into chat.deepseek.com.
-// Works on Chrome, Edge, Brave, Opera (silent PDF via debugger API)
-// and Firefox (print dialog fallback via window.print()).
-// No external network calls. No tracking. No paywall.
+// content.js — PaperSeek
+// Export DeepSeek chats to PDF.
+// Chrome/Edge/Brave/Opera: silent PDF via debugger API.
+// Firefox/Safari: window.print() system dialog.
+// Zero telemetry. Zero external calls.
 
-// ─── Cross-browser API shim ───────────────────────────────────────────────────
+// ─── Cross-browser shim ───────────────────────────────────────────────────────
 const api = typeof browser !== "undefined" ? browser : chrome;
 
-// ─── Browser detection ────────────────────────────────────────────────────────
-// Chrome/Edge/Brave/Opera all have chrome.debugger available.
-// Firefox and Safari do not — they get the window.print() fallback.
+// Chrome/Edge/Brave/Opera have chrome.debugger → silent PDF.
+// Firefox/Safari fall back to window.print().
 const IS_CHROMIUM = !!(
   typeof chrome !== "undefined" &&
   chrome.runtime &&
   typeof chrome.debugger !== "undefined"
 );
 
-// ─── Storage helpers ──────────────────────────────────────────────────────────
-const KEYS = {
-  paperSize: "dse-paper-size",
-  landscape: "dse-landscape",
-  filename:  "dse-filename",
-  scale:     "dse-scale",
-  margin:    "dse-margin",
+// ─── Storage ──────────────────────────────────────────────────────────────────
+const K = {
+  paperSize: "ps-paper-size",
+  landscape: "ps-landscape",
+  filename:  "ps-filename",
+  scale:     "ps-scale",
+  margin:    "ps-margin",
 };
+const get = (k, fb) => { const v = localStorage.getItem(k); return v !== null ? v : fb; };
+const set = (k, v) => localStorage.setItem(k, String(v));
 
-const get = (key, fallback) => {
-  const v = localStorage.getItem(key);
-  return v !== null ? v : fallback;
-};
-const set = (key, value) => localStorage.setItem(key, String(value));
-
-// ─── DeepSeek message selector ────────────────────────────────────────────────
+// ─── DeepSeek message detection ───────────────────────────────────────────────
 function findMessages() {
-  const candidates = [
+  const tries = [
     '[class*="ds-message-container"]',
     '[class*="chat-message"]',
     '[class*="fef49d0"]',
     '[class*="f9bf7997"]',
     '[class*="fa81"]',
   ];
-  for (const sel of candidates) {
-    const els = document.querySelectorAll(sel);
-    if (els.length > 0) return Array.from(els);
+  for (const s of tries) {
+    const els = document.querySelectorAll(s);
+    if (els.length) return Array.from(els);
   }
   return [];
 }
 
 // ─── State ────────────────────────────────────────────────────────────────────
-let isSelectMode   = false;
-let selectedIds    = new Set();
-let toolbar        = null;
-let settingsOpen   = false;
-let msgObserver    = null;
+let isSelectMode = false;
+let selectedIds  = new Set();
+let toolbar      = null;
+let settingsOpen = false;
+let msgObserver  = null;
 
-// ─── Print stylesheet (Firefox / window.print() fallback) ─────────────────────
+// ─── Print styles (Firefox fallback) ─────────────────────────────────────────
 function injectPrintStyles() {
-  if (document.getElementById("dse-print-styles")) return;
+  if (document.getElementById("ps-print-styles")) return;
   const s = document.createElement("style");
-  s.id = "dse-print-styles";
+  s.id = "ps-print-styles";
   s.textContent = `
     @media print {
-      /* Hide everything except the chat thread */
-      #dse-toolbar,
-      #dse-settings,
-      #dse-notification,
+      #ps-toolbar, #ps-settings, #ps-notification,
       header, nav, aside,
-      [class*="sidebar"],
-      [class*="input-area"],
-      [class*="bottom-bar"],
-      [class*="action-bar"],
-      [class*="ds-input"],
-      [class*="suggestion"],
-      [class*="footer"] {
+      [class*="sidebar"], [class*="input-area"],
+      [class*="bottom-bar"], [class*="action-bar"],
+      [class*="ds-input"], [class*="suggestion"], [class*="footer"] {
         display: none !important;
       }
-      /* Hide non-selected messages when in select mode */
-      .dse-print-hidden {
-        display: none !important;
-      }
+      .ps-print-hidden { display: none !important; }
       body { background: #fff !important; }
     }
   `;
   document.head.appendChild(s);
 }
 
-// ─── Toolbar injection ────────────────────────────────────────────────────────
-const TOOLBAR_ID = "dse-toolbar";
+// ─── Design tokens ────────────────────────────────────────────────────────────
+// Mint:     #3DF49A   → Fahim's brand accent across all projects
+// Dark bg:  #0A0A0A   → Jet black glass toolbar
+// Surface:  #141414   → Slightly lifted surface
+// Border:   rgba(255,255,255,0.09)
+// Text:     #F1F5F9 primary / #64748B secondary
+// Danger:   #F87171
 
+const CSS = `
+  /* ── Toolbar ─────────────────────────────────── */
+  #ps-toolbar {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 2147483647;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    background: rgba(10, 10, 10, 0.94);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.09);
+    box-shadow:
+      0 0 0 1px rgba(0,0,0,0.5),
+      0 8px 32px rgba(0,0,0,0.55),
+      0 2px 8px rgba(0,0,0,0.4);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    font-size: 13px;
+  }
+
+  /* ── Buttons ─────────────────────────────────── */
+  .ps-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 13px;
+    border: none;
+    border-radius: 9px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+    letter-spacing: -0.01em;
+  }
+
+  /* Primary — solid mint */
+  .ps-btn-primary {
+    background: #3DF49A;
+    color: #080D0A;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.12) inset,
+                0 2px 8px rgba(61, 244, 154, 0.25);
+  }
+  .ps-btn-primary:hover {
+    background: #52F7A5;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.16) inset,
+                0 4px 14px rgba(61, 244, 154, 0.35);
+    transform: translateY(-1px);
+  }
+  .ps-btn-primary:active { transform: translateY(0); }
+  .ps-btn-primary:disabled {
+    background: #1E2922;
+    color: #3D5045;
+    box-shadow: none;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  /* Ghost — outlined */
+  .ps-btn-ghost {
+    background: rgba(255,255,255,0.04);
+    color: #94A3B8;
+    border: 1px solid rgba(255,255,255,0.09);
+  }
+  .ps-btn-ghost:hover {
+    background: rgba(255,255,255,0.08);
+    color: #CBD5E1;
+    border-color: rgba(255,255,255,0.14);
+  }
+
+  /* Danger ghost */
+  .ps-btn-danger {
+    background: transparent;
+    color: #6B7280;
+    border: 1px solid rgba(255,255,255,0.07);
+  }
+  .ps-btn-danger:hover {
+    background: rgba(248, 113, 113, 0.08);
+    color: #F87171;
+    border-color: rgba(248, 113, 113, 0.2);
+  }
+
+  /* Icon-only button */
+  .ps-btn-icon {
+    padding: 7px;
+    background: rgba(255,255,255,0.04);
+    color: #64748B;
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 9px;
+    transition: all 0.15s ease;
+  }
+  .ps-btn-icon:hover {
+    background: rgba(255,255,255,0.08);
+    color: #3DF49A;
+    border-color: rgba(61,244,154,0.25);
+  }
+  .ps-btn-icon svg { display: block; }
+
+  /* Count badge */
+  .ps-count {
+    font-size: 12px;
+    color: #3DF49A;
+    padding: 0 4px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
+  }
+
+  /* Firefox hint */
+  .ps-hint {
+    font-size: 11px;
+    color: #374151;
+    padding: 0 2px;
+  }
+
+  /* ── Settings panel ──────────────────────────── */
+  #ps-settings {
+    position: fixed;
+    bottom: 68px;
+    right: 20px;
+    z-index: 2147483647;
+    background: #0E0E0E;
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 16px;
+    box-shadow:
+      0 0 0 1px rgba(0,0,0,0.6),
+      0 24px 64px rgba(0,0,0,0.7),
+      0 8px 24px rgba(0,0,0,0.5);
+    padding: 18px;
+    width: 290px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    animation: ps-in 0.2s cubic-bezier(0.16,1,0.3,1);
+  }
+  @keyframes ps-in {
+    from { opacity: 0; transform: scale(0.96) translateY(8px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  .ps-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0 0 16px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+  .ps-panel-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #F1F5F9;
+    letter-spacing: -0.02em;
+  }
+  .ps-badge {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 2px 7px;
+    border-radius: 20px;
+    background: rgba(61,244,154,0.1);
+    color: #3DF49A;
+    border: 1px solid rgba(61,244,154,0.2);
+    letter-spacing: 0.01em;
+    text-transform: uppercase;
+  }
+
+  .ps-field { margin-bottom: 13px; }
+  .ps-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 500;
+    color: #4B5563;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin-bottom: 6px;
+  }
+
+  .ps-input, .ps-select {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 9px;
+    border: 1px solid rgba(255,255,255,0.08);
+    font-size: 13px;
+    background: rgba(255,255,255,0.04);
+    color: #E2E8F0;
+    box-sizing: border-box;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .ps-input::placeholder { color: #374151; }
+  .ps-input:focus, .ps-select:focus {
+    border-color: rgba(61,244,154,0.4);
+    box-shadow: 0 0 0 3px rgba(61,244,154,0.08);
+    background: rgba(255,255,255,0.06);
+  }
+  .ps-select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%234B5563' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 9px center;
+    background-size: 14px;
+    padding-right: 28px;
+    cursor: pointer;
+  }
+
+  /* Radio toggle group */
+  .ps-toggle {
+    display: flex;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 9px;
+    padding: 3px;
+    gap: 3px;
+  }
+  .ps-toggle-opt { flex: 1; }
+  .ps-toggle-opt input { display: none; }
+  .ps-toggle-opt label {
+    display: block;
+    text-align: center;
+    padding: 6px;
+    border-radius: 7px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #4B5563;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .ps-toggle-opt input:checked + label {
+    background: rgba(61,244,154,0.12);
+    color: #3DF49A;
+    border: 1px solid rgba(61,244,154,0.22);
+  }
+  .ps-toggle-opt label:hover { color: #94A3B8; }
+
+  /* Slider */
+  .ps-slider-row { display: flex; align-items: center; gap: 10px; }
+  .ps-slider {
+    flex: 1;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.08);
+    outline: none;
+  }
+  .ps-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #3DF49A;
+    cursor: pointer;
+    border: 2px solid #0A0A0A;
+    box-shadow: 0 0 0 1px rgba(61,244,154,0.3);
+    transition: box-shadow 0.15s;
+  }
+  .ps-slider::-webkit-slider-thumb:hover {
+    box-shadow: 0 0 0 4px rgba(61,244,154,0.15);
+  }
+  .ps-slider-val {
+    font-size: 12px;
+    color: #3DF49A;
+    min-width: 36px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+  }
+
+  /* Firefox note */
+  .ps-ff-note {
+    font-size: 12px;
+    color: #374151;
+    line-height: 1.6;
+    padding: 10px 12px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 9px;
+  }
+
+  .ps-panel-footer {
+    margin-top: 14px;
+    padding-top: 13px;
+    border-top: 1px solid rgba(255,255,255,0.07);
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  /* ── Message selection ───────────────────────── */
+  .ps-selectable {
+    position: relative !important;
+    transition: box-shadow 0.18s ease !important;
+  }
+  .ps-selectable[data-ps-sel="true"] {
+    outline: 2px solid rgba(61,244,154,0.6) !important;
+    outline-offset: 4px !important;
+    border-radius: 10px !important;
+  }
+  .ps-chk-wrap {
+    position: absolute !important;
+    top: 50% !important;
+    left: -36px !important;
+    transform: translateY(-50%) !important;
+    z-index: 9999 !important;
+    opacity: 0 !important;
+    transition: opacity 0.15s !important;
+    pointer-events: all !important;
+  }
+  .ps-selectable:hover .ps-chk-wrap,
+  .ps-selectable[data-ps-sel="true"] .ps-chk-wrap { opacity: 1 !important; }
+  .ps-chk {
+    width: 20px !important;
+    height: 20px !important;
+    cursor: pointer !important;
+    accent-color: #3DF49A !important;
+    border-radius: 5px !important;
+  }
+
+  /* ── Notification ────────────────────────────── */
+  #ps-notification {
+    position: fixed;
+    bottom: 76px;
+    right: 20px;
+    z-index: 2147483647;
+    background: #0E0E0E;
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 11px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    padding: 12px 16px;
+    min-width: 240px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    font-size: 13px;
+    color: #E2E8F0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: ps-slide 0.28s cubic-bezier(0.16,1,0.3,1);
+  }
+  @keyframes ps-slide {
+    from { transform: translateX(110%); opacity: 0; }
+    to   { transform: translateX(0);    opacity: 1; }
+  }
+`;
+
+// ─── SVG icons ────────────────────────────────────────────────────────────────
+const ICONS = {
+  export: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>`,
+  select: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
+  settings: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
+  ok: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3DF49A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,
+  err: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F87171" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
+};
+
+// ─── Toolbar HTML ──────────────────────────────────────────────────────────────
+const TOOLBAR_ID = "ps-toolbar";
+
+function buildDefaultHTML() {
+  const hint = IS_CHROMIUM ? "" : `<span class="ps-hint">print dialog</span>`;
+  return `
+    <button class="ps-btn ps-btn-primary" id="ps-export-btn">${ICONS.export} Export PDF</button>
+    <button class="ps-btn ps-btn-ghost"   id="ps-select-btn">${ICONS.select} Select</button>
+    ${hint}
+    <button class="ps-btn-icon" id="ps-settings-btn" title="Settings" aria-label="Settings">${ICONS.settings}</button>
+  `;
+}
+
+function buildSelectHTML(count) {
+  return `
+    <span class="ps-count">${count} selected</span>
+    <button class="ps-btn ps-btn-primary" id="ps-export-btn" ${count === 0 ? "disabled" : ""}>${ICONS.export} Export</button>
+    <button class="ps-btn ps-btn-danger"  id="ps-cancel-btn">Cancel</button>
+  `;
+}
+
+// ─── Toolbar injection ────────────────────────────────────────────────────────
 function injectToolbar() {
   if (document.getElementById(TOOLBAR_ID)) return;
 
   const style = document.createElement("style");
-  style.id = "dse-styles";
-  style.textContent = `
-    #dse-toolbar {
-      position: fixed; bottom: 20px; right: 20px;
-      z-index: 2147483647;
-      display: flex; align-items: center; gap: 8px;
-      padding: 8px 12px;
-      background: rgba(255,255,255,0.92);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border-radius: 12px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-      border: 1px solid rgba(0,0,0,0.08);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      font-size: 13px;
-    }
-    body[data-ds-theme="dark"] #dse-toolbar,
-    body.dark #dse-toolbar {
-      background: rgba(30,30,30,0.95);
-      border-color: rgba(255,255,255,0.1);
-      box-shadow: 0 4px 16px rgba(0,0,0,0.45);
-    }
-    .dse-btn {
-      display: flex; align-items: center; gap: 6px;
-      padding: 7px 14px; border: none; border-radius: 8px;
-      cursor: pointer; font-size: 13px; font-weight: 500;
-      transition: all 0.18s ease; white-space: nowrap; line-height: 1;
-    }
-    .dse-btn-primary {
-      background: linear-gradient(135deg, #1a73e8, #1557b0);
-      color: #fff;
-      box-shadow: 0 2px 6px rgba(26,115,232,0.3);
-    }
-    .dse-btn-primary:hover {
-      background: linear-gradient(135deg, #1557b0, #1a73e8);
-      box-shadow: 0 4px 10px rgba(26,115,232,0.4);
-      transform: translateY(-1px);
-    }
-    .dse-btn-primary:disabled {
-      background: #ccc; box-shadow: none;
-      cursor: not-allowed; transform: none;
-    }
-    .dse-btn-secondary {
-      background: transparent; color: #1a73e8;
-      border: 1.5px solid #1a73e8;
-    }
-    .dse-btn-secondary:hover {
-      background: rgba(26,115,232,0.08);
-      transform: translateY(-1px);
-    }
-    .dse-btn-ghost {
-      background: transparent; color: #64748b;
-      border: 1.5px solid #94a3b8;
-    }
-    .dse-btn-ghost:hover { background: rgba(100,116,139,0.1); }
-    body[data-ds-theme="dark"] .dse-btn-secondary,
-    body.dark .dse-btn-secondary { color: #60a5fa; border-color: #60a5fa; }
-    body[data-ds-theme="dark"] .dse-btn-ghost,
-    body.dark .dse-btn-ghost   { color: #94a3b8;  border-color: #475569;  }
-
-    /* Firefox badge */
-    .dse-browser-note {
-      font-size: 11px; color: #94a3b8;
-      padding: 0 2px;
-    }
-
-    /* Settings panel */
-    #dse-settings {
-      position: fixed; bottom: 72px; right: 20px;
-      z-index: 2147483647;
-      background: rgba(255,255,255,0.98);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid rgba(0,0,0,0.08);
-      border-radius: 16px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.12);
-      padding: 20px; width: 300px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      animation: dse-appear 0.2s cubic-bezier(0.16,1,0.3,1);
-    }
-    body[data-ds-theme="dark"] #dse-settings,
-    body.dark #dse-settings {
-      background: rgba(26,26,26,0.97);
-      border-color: rgba(255,255,255,0.1);
-      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-    }
-    @keyframes dse-appear {
-      from { opacity:0; transform: scale(0.96) translateY(6px); }
-      to   { opacity:1; transform: scale(1) translateY(0); }
-    }
-    .dse-settings-title {
-      font-size: 15px; font-weight: 600; color: #1a1a1a;
-      margin: 0 0 16px; padding-bottom: 12px;
-      border-bottom: 1px solid rgba(0,0,0,0.07);
-      display: flex; align-items: center; justify-content: space-between;
-    }
-    body[data-ds-theme="dark"] .dse-settings-title,
-    body.dark .dse-settings-title {
-      color: #f3f4f6; border-color: rgba(255,255,255,0.1);
-    }
-    .dse-badge {
-      font-size: 11px; font-weight: 500;
-      padding: 2px 8px; border-radius: 20px;
-      background: rgba(26,115,232,0.1); color: #1a73e8;
-    }
-    body[data-ds-theme="dark"] .dse-badge,
-    body.dark .dse-badge { background: rgba(96,165,250,0.15); color: #60a5fa; }
-    .dse-field { margin-bottom: 14px; }
-    .dse-label {
-      display: block; font-size: 12px; font-weight: 600;
-      color: #64748b; text-transform: uppercase;
-      letter-spacing: 0.04em; margin-bottom: 6px;
-    }
-    body[data-ds-theme="dark"] .dse-label,
-    body.dark .dse-label { color: #94a3b8; }
-    .dse-input, .dse-select {
-      width: 100%; padding: 8px 10px; border-radius: 8px;
-      border: 1px solid rgba(0,0,0,0.12); font-size: 13px;
-      background: #fff; color: #1a1a1a; box-sizing: border-box;
-      transition: border-color 0.15s, box-shadow 0.15s; outline: none;
-    }
-    .dse-input:focus, .dse-select:focus {
-      border-color: #4299e1;
-      box-shadow: 0 0 0 3px rgba(66,153,225,0.2);
-    }
-    body[data-ds-theme="dark"] .dse-input,
-    body[data-ds-theme="dark"] .dse-select,
-    body.dark .dse-input,
-    body.dark .dse-select {
-      background: rgba(255,255,255,0.06);
-      border-color: rgba(255,255,255,0.12); color: #f3f4f6;
-    }
-    .dse-radio-group { display: flex; gap: 6px; }
-    .dse-radio-option { flex: 1; text-align: center; }
-    .dse-radio-option input { display: none; }
-    .dse-radio-option label {
-      display: block; padding: 7px; border-radius: 8px;
-      border: 1.5px solid rgba(0,0,0,0.12);
-      font-size: 13px; font-weight: 500; color: #475569;
-      cursor: pointer; transition: all 0.15s; text-align: center;
-    }
-    body[data-ds-theme="dark"] .dse-radio-option label,
-    body.dark .dse-radio-option label {
-      color: #94a3b8; border-color: rgba(255,255,255,0.15);
-    }
-    .dse-radio-option input:checked + label {
-      border-color: #4299e1; color: #4299e1;
-      background: rgba(66,153,225,0.08);
-    }
-    .dse-slider-row { display: flex; align-items: center; gap: 10px; }
-    .dse-slider {
-      flex: 1; -webkit-appearance: none; height: 5px;
-      border-radius: 3px; background: #e2e8f0; outline: none;
-    }
-    .dse-slider::-webkit-slider-thumb {
-      -webkit-appearance: none; width: 18px; height: 18px;
-      border-radius: 50%; background: #4299e1; cursor: pointer;
-      border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.2);
-    }
-    .dse-slider-val { font-size: 12px; color: #64748b; min-width: 34px; text-align: right; }
-    body[data-ds-theme="dark"] .dse-slider-val,
-    body.dark .dse-slider-val { color: #94a3b8; }
-    .dse-settings-footer {
-      margin-top: 16px; padding-top: 12px;
-      border-top: 1px solid rgba(0,0,0,0.07);
-      display: flex; justify-content: flex-end;
-    }
-    body[data-ds-theme="dark"] .dse-settings-footer,
-    body.dark .dse-settings-footer { border-color: rgba(255,255,255,0.1); }
-
-    /* Message selection */
-    .dse-msg-selectable {
-      position: relative !important;
-      transition: all 0.2s ease !important;
-    }
-    .dse-msg-selectable[data-dse-selected="true"] {
-      outline: 2px solid #4299e1 !important;
-      outline-offset: 3px !important;
-      border-radius: 10px !important;
-      box-shadow: 0 0 0 5px rgba(66,153,225,0.12) !important;
-    }
-    .dse-checkbox-wrap {
-      position: absolute !important;
-      top: 50% !important; left: -36px !important;
-      transform: translateY(-50%) !important;
-      z-index: 100 !important; opacity: 0 !important;
-      transition: opacity 0.15s !important;
-    }
-    .dse-msg-selectable:hover .dse-checkbox-wrap,
-    .dse-msg-selectable[data-dse-selected="true"] .dse-checkbox-wrap {
-      opacity: 1 !important;
-    }
-    .dse-checkbox {
-      width: 22px !important; height: 22px !important;
-      cursor: pointer !important; accent-color: #4299e1 !important;
-    }
-    .dse-msg-count { font-size: 12px; color: #64748b; padding: 0 4px; }
-    body[data-ds-theme="dark"] .dse-msg-count,
-    body.dark .dse-msg-count { color: #94a3b8; }
-
-    /* Notification */
-    #dse-notification {
-      position: fixed; bottom: 80px; right: 20px;
-      z-index: 2147483647;
-      background: #fff; border-left: 4px solid #22c55e;
-      border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,0.14);
-      padding: 14px 18px; min-width: 260px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      font-size: 14px; color: #1a1a1a;
-      display: flex; align-items: center; gap: 10px;
-      animation: dse-slide-in 0.3s ease;
-    }
-    @keyframes dse-slide-in {
-      from { transform: translateX(110%); opacity: 0; }
-      to   { transform: translateX(0);    opacity: 1; }
-    }
-    body[data-ds-theme="dark"] #dse-notification,
-    body.dark #dse-notification { background: #1e1e1e; color: #e5e7eb; }
-  `;
+  style.id = "ps-styles";
+  style.textContent = CSS;
   document.head.appendChild(style);
   injectPrintStyles();
 
@@ -318,143 +468,110 @@ function injectToolbar() {
   toolbar.id = TOOLBAR_ID;
   toolbar.innerHTML = buildDefaultHTML();
   document.body.appendChild(toolbar);
-  attachListeners();
+  bindListeners();
 }
 
-// ─── Toolbar HTML builders ────────────────────────────────────────────────────
-
-const PDF_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>`;
-const SEL_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`;
-const COG_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
-
-function buildDefaultHTML() {
-  // Show a small note on non-Chromium browsers so users know print dialog is expected
-  const note = IS_CHROMIUM
-    ? ""
-    : `<span class="dse-browser-note" title="Your browser uses the system print dialog for PDF export">via print dialog</span>`;
-  return `
-    <button class="dse-btn dse-btn-primary" id="dse-export-btn">${PDF_ICON} Export PDF</button>
-    <button class="dse-btn dse-btn-secondary" id="dse-select-btn">${SEL_ICON} Select</button>
-    ${note}
-    <button class="dse-btn dse-btn-secondary" id="dse-settings-btn" title="Settings" style="padding:7px 9px;">${COG_ICON}</button>
-  `;
-}
-
-function buildSelectHTML(count) {
-  return `
-    <span class="dse-msg-count">${count} selected</span>
-    <button class="dse-btn dse-btn-primary" id="dse-export-btn" ${count === 0 ? "disabled" : ""}>${PDF_ICON} Export Selected</button>
-    <button class="dse-btn dse-btn-ghost" id="dse-cancel-select-btn">Cancel</button>
-  `;
-}
-
-function attachListeners() {
+function bindListeners() {
   toolbar.addEventListener("click", (e) => {
-    const btn = e.target.closest("button");
-    if (!btn) return;
-    if (btn.id === "dse-export-btn")        handleExport();
-    if (btn.id === "dse-select-btn")        enterSelectMode();
-    if (btn.id === "dse-cancel-select-btn") exitSelectMode();
-    if (btn.id === "dse-settings-btn")      toggleSettings();
+    const b = e.target.closest("button");
+    if (!b) return;
+    if (b.id === "ps-export-btn")   handleExport();
+    if (b.id === "ps-select-btn")   enterSelect();
+    if (b.id === "ps-cancel-btn")   exitSelect();
+    if (b.id === "ps-settings-btn") toggleSettings();
   });
 }
 
 // ─── Settings panel ───────────────────────────────────────────────────────────
-
-function toggleSettings() {
-  settingsOpen ? closeSettings() : openSettings();
-}
+function toggleSettings() { settingsOpen ? closeSettings() : openSettings(); }
 
 function openSettings() {
-  closeSettings();
-  settingsOpen = true;
-
-  const paperSize = get(KEYS.paperSize, "a4");
-  const landscape = get(KEYS.landscape, "false") === "true";
-  const filename  = get(KEYS.filename,  "deepseek-chat");
-  const scale     = parseFloat(get(KEYS.scale,  "1"));
-  const margin    = parseFloat(get(KEYS.margin, "0.4"));
+  closeSettings(); settingsOpen = true;
+  const paperSize = get(K.paperSize, "a4");
+  const landscape = get(K.landscape, "false") === "true";
+  const filename  = get(K.filename,  "deepseek-chat");
+  const scale     = parseFloat(get(K.scale,  "1"));
+  const margin    = parseFloat(get(K.margin, "0.4"));
 
   const panel = document.createElement("div");
-  panel.id = "dse-settings";
+  panel.id = "ps-settings";
   panel.innerHTML = `
-    <div class="dse-settings-title">
-      Export Settings
-      <span class="dse-badge">${IS_CHROMIUM ? "Chrome / Edge" : "Firefox"}</span>
+    <div class="ps-panel-header">
+      <span class="ps-panel-title">Export settings</span>
+      <span class="ps-badge">${IS_CHROMIUM ? "Chrome" : "Firefox"}</span>
     </div>
 
-    <div class="dse-field">
-      <label class="dse-label">Filename</label>
-      <input class="dse-input" id="dse-s-filename" type="text" value="${filename}" placeholder="deepseek-chat" />
+    <div class="ps-field">
+      <label class="ps-label">Filename</label>
+      <input class="ps-input" id="ps-s-fn" type="text" value="${filename}" placeholder="deepseek-chat">
     </div>
 
-    <div class="dse-field">
-      <label class="dse-label">Paper Size</label>
-      <select class="dse-select" id="dse-s-paper">
-        <option value="a4"     ${paperSize === "a4"     ? "selected" : ""}>A4 (210 x 297 mm)</option>
-        <option value="a5"     ${paperSize === "a5"     ? "selected" : ""}>A5 (148 x 210 mm)</option>
-        <option value="letter" ${paperSize === "letter" ? "selected" : ""}>Letter (8.5 x 11 in)</option>
+    <div class="ps-field">
+      <label class="ps-label">Paper size</label>
+      <select class="ps-select" id="ps-s-paper">
+        <option value="a4"     ${paperSize==="a4"     ?"selected":""}>A4  —  210 × 297 mm</option>
+        <option value="a5"     ${paperSize==="a5"     ?"selected":""}>A5  —  148 × 210 mm</option>
+        <option value="letter" ${paperSize==="letter" ?"selected":""}>Letter  —  8.5 × 11 in</option>
       </select>
     </div>
 
-    <div class="dse-field">
-      <label class="dse-label">Orientation</label>
-      <div class="dse-radio-group">
-        <div class="dse-radio-option">
-          <input type="radio" name="dse-ori" id="dse-portrait"  value="false" ${!landscape ? "checked" : ""}>
-          <label for="dse-portrait">Portrait</label>
+    <div class="ps-field">
+      <label class="ps-label">Orientation</label>
+      <div class="ps-toggle">
+        <div class="ps-toggle-opt">
+          <input type="radio" name="ps-ori" id="ps-portrait"  value="false" ${!landscape?"checked":""}>
+          <label for="ps-portrait">Portrait</label>
         </div>
-        <div class="dse-radio-option">
-          <input type="radio" name="dse-ori" id="dse-landscape" value="true"  ${landscape  ? "checked" : ""}>
-          <label for="dse-landscape">Landscape</label>
+        <div class="ps-toggle-opt">
+          <input type="radio" name="ps-ori" id="ps-landscape" value="true"  ${landscape ?"checked":""}>
+          <label for="ps-landscape">Landscape</label>
         </div>
       </div>
     </div>
 
     ${IS_CHROMIUM ? `
-    <div class="dse-field">
-      <label class="dse-label">Scale &nbsp;<span id="dse-scale-lbl">${Math.round(scale * 100)}%</span></label>
-      <div class="dse-slider-row">
-        <input class="dse-slider" id="dse-s-scale" type="range" min="0.5" max="1.5" step="0.05" value="${scale}" />
-        <span class="dse-slider-val" id="dse-scale-disp">${Math.round(scale * 100)}%</span>
+    <div class="ps-field">
+      <label class="ps-label">Scale</label>
+      <div class="ps-slider-row">
+        <input class="ps-slider" id="ps-s-scale" type="range" min="0.5" max="1.5" step="0.05" value="${scale}">
+        <span class="ps-slider-val" id="ps-scale-v">${Math.round(scale*100)}%</span>
       </div>
     </div>
-    <div class="dse-field">
-      <label class="dse-label">Margin (inches)</label>
-      <div class="dse-slider-row">
-        <input class="dse-slider" id="dse-s-margin" type="range" min="0" max="1" step="0.05" value="${margin}" />
-        <span class="dse-slider-val" id="dse-margin-disp">${margin.toFixed(2)}"</span>
+    <div class="ps-field">
+      <label class="ps-label">Margin</label>
+      <div class="ps-slider-row">
+        <input class="ps-slider" id="ps-s-margin" type="range" min="0" max="1" step="0.05" value="${margin}">
+        <span class="ps-slider-val" id="ps-margin-v">${margin.toFixed(2)}"</span>
       </div>
     </div>
     ` : `
-    <div class="dse-field" style="font-size:12px;color:#94a3b8;line-height:1.5;padding:8px;background:rgba(0,0,0,0.04);border-radius:8px;">
-      Scale and margin are controlled by your browser's print dialog on Firefox.
+    <div class="ps-field">
+      <div class="ps-ff-note">Scale and margin are set in your browser's print dialog.</div>
     </div>
     `}
 
-    <div class="dse-settings-footer">
-      <button class="dse-btn dse-btn-primary" id="dse-save-settings">Save</button>
+    <div class="ps-panel-footer">
+      <button class="ps-btn ps-btn-primary" id="ps-save-btn">Save</button>
     </div>
   `;
   document.body.appendChild(panel);
 
   if (IS_CHROMIUM) {
-    panel.querySelector("#dse-s-scale").addEventListener("input", (e) => {
-      const v = Math.round(parseFloat(e.target.value) * 100) + "%";
-      panel.querySelector("#dse-scale-disp").textContent = v;
+    panel.querySelector("#ps-s-scale").addEventListener("input", e => {
+      panel.querySelector("#ps-scale-v").textContent = Math.round(parseFloat(e.target.value)*100)+"%";
     });
-    panel.querySelector("#dse-s-margin").addEventListener("input", (e) => {
-      panel.querySelector("#dse-margin-disp").textContent = parseFloat(e.target.value).toFixed(2) + '"';
+    panel.querySelector("#ps-s-margin").addEventListener("input", e => {
+      panel.querySelector("#ps-margin-v").textContent = parseFloat(e.target.value).toFixed(2)+'"';
     });
   }
 
-  panel.querySelector("#dse-save-settings").addEventListener("click", () => {
-    set(KEYS.paperSize, panel.querySelector("#dse-s-paper").value);
-    set(KEYS.landscape, panel.querySelector('input[name="dse-ori"]:checked').value);
-    set(KEYS.filename,  (panel.querySelector("#dse-s-filename").value || "deepseek-chat").trim());
+  panel.querySelector("#ps-save-btn").addEventListener("click", () => {
+    set(K.paperSize, panel.querySelector("#ps-s-paper").value);
+    set(K.landscape, panel.querySelector('input[name="ps-ori"]:checked').value);
+    set(K.filename,  panel.querySelector("#ps-s-fn").value.trim() || "deepseek-chat");
     if (IS_CHROMIUM) {
-      set(KEYS.scale,  panel.querySelector("#dse-s-scale").value);
-      set(KEYS.margin, panel.querySelector("#dse-s-margin").value);
+      set(K.scale,  panel.querySelector("#ps-s-scale").value);
+      set(K.margin, panel.querySelector("#ps-s-margin").value);
     }
     closeSettings();
   });
@@ -463,199 +580,142 @@ function openSettings() {
 }
 
 function outsideClick(e) {
-  const panel = document.getElementById("dse-settings");
-  if (panel && !panel.contains(e.target) && e.target.id !== "dse-settings-btn" && !e.target.closest("#dse-settings-btn")) {
-    closeSettings();
-  }
+  const panel = document.getElementById("ps-settings");
+  if (panel && !panel.contains(e.target) && !e.target.closest("#ps-settings-btn")) closeSettings();
 }
-
 function closeSettings() {
   settingsOpen = false;
-  document.getElementById("dse-settings")?.remove();
+  document.getElementById("ps-settings")?.remove();
   document.removeEventListener("click", outsideClick);
 }
 
 // ─── Select mode ──────────────────────────────────────────────────────────────
-
-function enterSelectMode() {
-  isSelectMode = true;
-  selectedIds.clear();
-  toolbar.innerHTML = buildSelectHTML(0);
-  attachListeners();
+function enterSelect() {
+  isSelectMode = true; selectedIds.clear();
+  toolbar.innerHTML = buildSelectHTML(0); bindListeners();
   attachCheckboxes();
   msgObserver = new MutationObserver(attachCheckboxes);
   msgObserver.observe(document.body, { childList: true, subtree: true });
 }
 
-function exitSelectMode() {
-  isSelectMode = false;
-  selectedIds.clear();
-  msgObserver?.disconnect();
-  msgObserver = null;
-  document.querySelectorAll(".dse-msg-selectable").forEach((el) => {
-    el.classList.remove("dse-msg-selectable");
-    el.removeAttribute("data-dse-selected");
-    el.removeAttribute("data-dse-id");
-    el.querySelector(".dse-checkbox-wrap")?.remove();
+function exitSelect() {
+  isSelectMode = false; selectedIds.clear();
+  msgObserver?.disconnect(); msgObserver = null;
+  document.querySelectorAll(".ps-selectable").forEach(el => {
+    el.classList.remove("ps-selectable");
+    el.removeAttribute("data-ps-sel"); el.removeAttribute("data-ps-id");
+    el.querySelector(".ps-chk-wrap")?.remove();
   });
-  toolbar.innerHTML = buildDefaultHTML();
-  attachListeners();
+  toolbar.innerHTML = buildDefaultHTML(); bindListeners();
 }
 
 function attachCheckboxes() {
-  findMessages().forEach((el, idx) => {
-    if (el.querySelector(".dse-checkbox-wrap")) return;
-    const id = `dse-msg-${idx}`;
-    el.setAttribute("data-dse-id", id);
-    el.classList.add("dse-msg-selectable");
-
+  findMessages().forEach((el, i) => {
+    if (el.querySelector(".ps-chk-wrap")) return;
+    const id = `ps-${i}`;
+    el.setAttribute("data-ps-id", id);
+    el.classList.add("ps-selectable");
     const wrap = document.createElement("span");
-    wrap.className = "dse-checkbox-wrap";
-    wrap.innerHTML = `<input type="checkbox" class="dse-checkbox" data-dse-id="${id}" />`;
+    wrap.className = "ps-chk-wrap";
+    wrap.innerHTML = `<input type="checkbox" class="ps-chk" data-ps-id="${id}">`;
     el.appendChild(wrap);
-
-    wrap.querySelector(".dse-checkbox").addEventListener("change", (e) => {
-      const msgId = e.target.getAttribute("data-dse-id");
-      const msgEl = document.querySelector(`[data-dse-id="${msgId}"]`);
-      if (e.target.checked) { selectedIds.add(msgId);    msgEl?.setAttribute("data-dse-selected", "true"); }
-      else                   { selectedIds.delete(msgId); msgEl?.removeAttribute("data-dse-selected");      }
-      toolbar.innerHTML = buildSelectHTML(selectedIds.size);
-      attachListeners();
+    wrap.querySelector(".ps-chk").addEventListener("change", e => {
+      const mid = e.target.getAttribute("data-ps-id");
+      const mel = document.querySelector(`[data-ps-id="${mid}"]`);
+      e.target.checked ? (selectedIds.add(mid), mel?.setAttribute("data-ps-sel","true"))
+                       : (selectedIds.delete(mid), mel?.removeAttribute("data-ps-sel"));
+      toolbar.innerHTML = buildSelectHTML(selectedIds.size); bindListeners();
     });
   });
 }
 
 // ─── Export ───────────────────────────────────────────────────────────────────
-
 async function handleExport() {
-  const exportBtn = document.getElementById("dse-export-btn");
-  if (exportBtn) { exportBtn.disabled = true; exportBtn.textContent = "Exporting..."; }
+  const btn = document.getElementById("ps-export-btn");
+  if (btn) { btn.disabled = true; btn.textContent = "Exporting…"; }
 
-  // Hide non-selected messages (both for PDF silent print and window.print)
   const hidden = [];
   if (isSelectMode && selectedIds.size > 0) {
-    document.querySelectorAll(".dse-msg-selectable").forEach((el) => {
-      if (el.getAttribute("data-dse-selected") !== "true") {
-        el.classList.add("dse-print-hidden");
-        hidden.push(el);
+    document.querySelectorAll(".ps-selectable").forEach(el => {
+      if (el.getAttribute("data-ps-sel") !== "true") {
+        el.classList.add("ps-print-hidden"); hidden.push(el);
       }
     });
   }
 
-  // Build export options
-  const dateStr   = new Date().toISOString().split("T")[0];
-  const base      = get(KEYS.filename, "deepseek-chat");
-  const filename  = `${base}-${dateStr}.pdf`;
-  const options   = {
-    paperSize: get(KEYS.paperSize, "a4"),
-    landscape: get(KEYS.landscape, "false") === "true",
-    scale:     parseFloat(get(KEYS.scale,  "1")),
-    margin:    parseFloat(get(KEYS.margin, "0.4")),
-    filename,
+  const dateStr  = new Date().toISOString().split("T")[0];
+  const base     = get(K.filename, "deepseek-chat");
+  const options  = {
+    paperSize: get(K.paperSize, "a4"),
+    landscape: get(K.landscape, "false") === "true",
+    scale:     parseFloat(get(K.scale,  "1")),
+    margin:    parseFloat(get(K.margin, "0.4")),
+    filename:  `${base}-${dateStr}.pdf`,
   };
 
   if (IS_CHROMIUM) {
-    // Hide toolbar + settings while printing
     if (toolbar) toolbar.style.display = "none";
-    document.getElementById("dse-settings")?.style && (document.getElementById("dse-settings").style.display = "none");
+    const sp = document.getElementById("ps-settings");
+    if (sp) sp.style.display = "none";
 
-    await new Promise((r) => setTimeout(r, 80));
+    await new Promise(r => setTimeout(r, 80));
+    let res;
+    try { res = await api.runtime.sendMessage({ type: "EXPORT_PDF", options }); }
+    catch(err) { res = { ok: false, error: err.message }; }
 
-    let response;
-    try {
-      response = await api.runtime.sendMessage({ type: "EXPORT_PDF", options });
-    } catch (err) {
-      response = { ok: false, error: err.message };
-    }
-
-    hidden.forEach((el) => el.classList.remove("dse-print-hidden"));
+    hidden.forEach(el => el.classList.remove("ps-print-hidden"));
     if (toolbar) toolbar.style.display = "";
-    const sp = document.getElementById("dse-settings");
     if (sp) sp.style.display = "";
 
-    if (response?.usePrint) {
-      // Chromium signalled no debugger available — fall through to print
-      firefoxPrint(hidden, exportBtn);
-      return;
-    }
-
-    restoreExportBtn(exportBtn);
-    if (response?.ok) {
-      if (isSelectMode) exitSelectMode();
-      showNotification("PDF saved successfully");
-    } else {
-      showNotification(`Export failed: ${response?.error || "Unknown error"}`, true);
-    }
-
+    if (res?.usePrint) { firefoxPrint(hidden, btn); return; }
+    restoreBtn(btn);
+    res?.ok ? (isSelectMode && exitSelect(), notify("PDF saved")) : notify(res?.error || "Export failed", true);
   } else {
-    // Firefox / Safari: use window.print() directly
-    firefoxPrint(hidden, exportBtn);
+    firefoxPrint(hidden, btn);
   }
 }
 
-function firefoxPrint(hiddenEls, exportBtn) {
-  // Hide the toolbar for the print dialog
+function firefoxPrint(hiddenEls, btn) {
   if (toolbar) toolbar.style.display = "none";
   closeSettings();
-
   window.print();
-
-  // Restore after print dialog closes
   setTimeout(() => {
-    hiddenEls.forEach((el) => el.classList.remove("dse-print-hidden"));
+    hiddenEls.forEach(el => el.classList.remove("ps-print-hidden"));
     if (toolbar) toolbar.style.display = "";
-    restoreExportBtn(exportBtn);
-    if (isSelectMode) exitSelectMode();
+    restoreBtn(btn);
+    if (isSelectMode) exitSelect();
   }, 500);
 }
 
-function restoreExportBtn(btn) {
+function restoreBtn(btn) {
   if (!btn) return;
   btn.disabled = false;
-  btn.innerHTML = isSelectMode
-    ? `${PDF_ICON} Export Selected`
-    : `${PDF_ICON} Export PDF`;
+  btn.innerHTML = isSelectMode ? `${ICONS.export} Export` : `${ICONS.export} Export PDF`;
 }
 
 // ─── Notification ─────────────────────────────────────────────────────────────
-
-function showNotification(message, isError = false) {
-  document.getElementById("dse-notification")?.remove();
+function notify(msg, isErr = false) {
+  document.getElementById("ps-notification")?.remove();
   const el = document.createElement("div");
-  el.id = "dse-notification";
-  el.style.borderLeftColor = isError ? "#ef4444" : "#22c55e";
-  const color = isError ? "#ef4444" : "#22c55e";
-  el.innerHTML = `
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-      ${isError
-        ? '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>'
-        : '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>'}
-    </svg>
-    <span>${message}</span>
-  `;
+  el.id = "ps-notification";
+  el.style.borderLeft = `3px solid ${isErr ? "#F87171" : "#3DF49A"}`;
+  el.innerHTML = `${isErr ? ICONS.err : ICONS.ok}<span>${msg}</span>`;
   document.body.appendChild(el);
-  setTimeout(() => el?.remove(), 4000);
+  setTimeout(() => el?.remove(), 3500);
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
-
 function init() {
   if (window.location.hostname !== "chat.deepseek.com") return;
   if (document.getElementById(TOOLBAR_ID)) return;
   injectToolbar();
 }
 
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", init);
-} else {
-  init();
-}
+document.readyState === "loading"
+  ? document.addEventListener("DOMContentLoaded", init)
+  : init();
 
-// Re-inject on SPA navigations
 let lastUrl = location.href;
 new MutationObserver(() => {
-  if (location.href !== lastUrl) {
-    lastUrl = location.href;
-    setTimeout(init, 500);
-  }
+  if (location.href !== lastUrl) { lastUrl = location.href; setTimeout(init, 500); }
 }).observe(document.body, { childList: true, subtree: true });
