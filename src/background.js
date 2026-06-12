@@ -1,17 +1,21 @@
 // background.js
 // Handles PDF export via Chrome Debugger API (Page.printToPDF).
+// Falls back gracefully on Firefox/Safari where the debugger API is unavailable.
 // No telemetry. No external connections. No paywall.
 
+// ─── Cross-browser API shim ───────────────────────────────────────────────────
+// Firefox exposes `browser.*` (Promise-based); Chrome exposes `chrome.*` (callback-based).
+// Chrome 99+ also returns Promises from most chrome.* calls, so we normalise here.
+const api = typeof browser !== "undefined" ? browser : chrome;
+
+// ─── Paper sizes (in inches) ──────────────────────────────────────────────────
 const PAPER_SIZES = {
-  a4: { width: 8.27, height: 11.69 },
-  a5: { width: 5.83, height: 8.27 },
-  letter: { width: 8.5, height: 11 },
+  a4:     { width: 8.27,  height: 11.69 },
+  a5:     { width: 5.83,  height: 8.27  },
+  letter: { width: 8.5,   height: 11    },
 };
 
-/**
- * Attaches the debugger to a tab, sends Page.printToPDF,
- * triggers a chrome.downloads.download, then detaches.
- */
+// ─── Debugger-based PDF (Chromium only) ───────────────────────────────────────
 async function printTabToPDF(tabId, options = {}) {
   const target = { tabId };
 
@@ -27,12 +31,9 @@ async function printTabToPDF(tabId, options = {}) {
     });
 
   const detach = () => {
-    try {
-      chrome.debugger.detach(target, () => {});
-    } catch (_) {}
+    try { chrome.debugger.detach(target, () => {}); } catch (_) {}
   };
 
-  // Attach debugger
   await new Promise((resolve, reject) => {
     chrome.debugger.attach(target, "1.3", () => {
       if (chrome.runtime.lastError) {
@@ -46,35 +47,31 @@ async function printTabToPDF(tabId, options = {}) {
   try {
     await sendCommand("Page.enable");
 
-    const paper = PAPER_SIZES[options.paperSize || "a4"];
+    const paper     = PAPER_SIZES[options.paperSize || "a4"];
     const landscape = options.landscape === true;
 
-    const pdfParams = {
-      printBackground: true,
-      displayHeaderFooter: false,
+    const { data } = await sendCommand("Page.printToPDF", {
+      printBackground:      true,
+      displayHeaderFooter:  false,
       landscape,
-      paperWidth: landscape ? paper.height : paper.width,
-      paperHeight: landscape ? paper.width : paper.height,
-      marginTop: options.margin ?? 0.4,
+      paperWidth:  landscape ? paper.height : paper.width,
+      paperHeight: landscape ? paper.width  : paper.height,
+      marginTop:    options.margin ?? 0.4,
       marginBottom: options.margin ?? 0.4,
-      marginLeft: options.margin ?? 0.4,
-      marginRight: options.margin ?? 0.4,
-      scale: options.scale ?? 1,
-      pageRanges: options.pageRanges || "",
-    };
+      marginLeft:   options.margin ?? 0.4,
+      marginRight:  options.margin ?? 0.4,
+      scale:        options.scale ?? 1,
+    });
 
-    const { data } = await sendCommand("Page.printToPDF", pdfParams);
-
-    const filename =
-      options.filename ||
-      `deepseek-chat-${new Date().toISOString().split("T")[0]}.pdf`;
+    const dateStr  = new Date().toISOString().split("T")[0];
+    const filename = options.filename || `deepseek-chat-${dateStr}.pdf`;
 
     await new Promise((resolve, reject) => {
       chrome.downloads.download(
         {
-          url: `data:application/pdf;base64,${data}`,
+          url:            `data:application/pdf;base64,${data}`,
           filename,
-          saveAs: false,
+          saveAs:         false,
           conflictAction: "uniquify",
         },
         (downloadId) => {
@@ -95,9 +92,16 @@ async function printTabToPDF(tabId, options = {}) {
   }
 }
 
-// Message handler from content script
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+// ─── Message handler ──────────────────────────────────────────────────────────
+api.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type !== "EXPORT_PDF") return;
+
+  // Firefox (and any browser without the debugger API) falls back to window.print()
+  // which is handled entirely in content.js — background just signals back.
+  if (!chrome.debugger) {
+    sendResponse({ ok: false, usePrint: true });
+    return;
+  }
 
   const tabId = message.tabId || sender.tab?.id;
   if (!tabId) {

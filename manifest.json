@@ -2,10 +2,11 @@
   "manifest_version": 3,
   "name": "DeepSeek Exporter",
   "description": "Export DeepSeek chats to PDF. Select specific messages or export the full conversation.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "background": {
     "service_worker": "src/background.js",
-    "type": "module"
+    "type": "module",
+    "scripts": ["src/background.js"]
   },
   "content_scripts": [
     {
@@ -32,5 +33,11 @@
     "48": "icons/48.png",
     "64": "icons/64.png",
     "128": "icons/128.png"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "deepseek-exporter@mahtamun-hoque-fahim",
+      "strict_min_version": "109.0"
+    }
   }
 }
