@@ -1,849 +1,763 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DeepSeek Exporter — Export chats to PDF</title>
-  <meta name="description" content="A clean, open-source Chrome extension that exports DeepSeek chats to PDF. No tracking. No paywall. No external calls." />
-  <meta property="og:title" content="DeepSeek Exporter" />
-  <meta property="og:description" content="Export your DeepSeek chats to PDF. Open source. Zero telemetry." />
-  <meta property="og:type" content="website" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PaperSeek — Export DeepSeek chats to PDF</title>
+  <meta name="description" content="Export your DeepSeek AI conversations to clean, high-quality PDFs. Select specific messages or the full chat. Free, open-source, zero tracking.">
+  <meta property="og:title" content="PaperSeek — Export DeepSeek chats to PDF">
+  <meta property="og:description" content="Export DeepSeek conversations to clean PDFs. Free, open-source, zero tracking.">
+  <meta property="og:image" content="https://mahtamun-hoque-fahim.github.io/deepseek-exporter/og.png">
+  <link rel="icon" href="../icons/32.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:       #070807;
-      --bg-card:  #0f110f;
-      --bg-panel: #141614;
-      --border:   rgba(255,255,255,0.07);
-      --mint:     #3DF49A;
-      --mint-dim: rgba(61,244,154,0.12);
-      --mint-glow:rgba(61,244,154,0.25);
-      --text:     #f0f2f0;
-      --muted:    #6b7a6b;
-      --subtle:   #3a4a3a;
-      --mono:     'JetBrains Mono', monospace;
-      --sans:     'Plus Jakarta Sans', sans-serif;
+      --bg:        #08090A;
+      --surf:      #111213;
+      --surf2:     #191A1B;
+      --border:    rgba(255,255,255,0.07);
+      --mint:      #3DF49A;
+      --mint-dim:  rgba(61,244,154,0.10);
+      --mint-glow: rgba(61,244,154,0.18);
+      --text:      #F1F5F9;
+      --muted:     #64748B;
+      --faint:     #374151;
+      --radius:    12px;
+      --font:      'Plus Jakarta Sans', system-ui, sans-serif;
+      --mono:      'JetBrains Mono', monospace;
     }
 
     html { scroll-behavior: smooth; }
-
     body {
       background: var(--bg);
       color: var(--text);
-      font-family: var(--sans);
-      font-size: 15px;
+      font-family: var(--font);
+      font-size: 16px;
       line-height: 1.6;
       -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
     }
 
-    /* ── Layout helpers ── */
-    .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
-    section { padding: 100px 0; }
+    a { color: inherit; text-decoration: none; }
 
-    /* ── Nav ── */
+    /* ── NAV ─────────────────────────────────────── */
     nav {
-      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-      background: rgba(7,8,7,0.85);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border-bottom: 1px solid var(--border);
-    }
-    .nav-inner {
-      max-width: 1120px; margin: 0 auto; padding: 0 24px;
-      height: 60px;
+      position: fixed; top: 0; left: 0; right: 0;
+      z-index: 100;
       display: flex; align-items: center; justify-content: space-between;
+      padding: 0 40px;
+      height: 60px;
+      background: rgba(8,9,10,0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
     }
     .nav-logo {
       display: flex; align-items: center; gap: 10px;
-      font-weight: 700; font-size: 15px; color: var(--text);
-      text-decoration: none;
+      font-weight: 700; font-size: 17px; letter-spacing: -0.03em;
     }
     .nav-logo-dot {
       width: 8px; height: 8px; border-radius: 50%;
       background: var(--mint);
       box-shadow: 0 0 8px var(--mint-glow);
     }
-    .nav-links { display: flex; align-items: center; gap: 8px; }
-    .btn {
-      display: inline-flex; align-items: center; gap: 7px;
-      padding: 8px 18px;
-      border-radius: 8px;
-      font-family: var(--sans);
-      font-size: 13px; font-weight: 600;
-      text-decoration: none;
-      cursor: pointer; border: none;
-      transition: all 0.18s ease;
-      white-space: nowrap;
-    }
-    .btn-primary {
-      background: var(--mint); color: #070807;
-    }
-    .btn-primary:hover {
-      background: #5ffbaa;
-      box-shadow: 0 0 20px var(--mint-glow);
-      transform: translateY(-1px);
-    }
-    .btn-ghost {
-      background: transparent; color: var(--muted);
-      border: 1px solid var(--border);
-    }
-    .btn-ghost:hover { color: var(--text); border-color: var(--subtle); }
-
-    /* ── Hero ── */
-    .hero {
-      padding-top: 160px;
-      padding-bottom: 80px;
-      position: relative;
-      overflow: hidden;
-    }
-    .hero-bg {
-      position: absolute; inset: 0; z-index: 0;
-      background:
-        radial-gradient(ellipse 60% 50% at 50% 0%, rgba(61,244,154,0.06) 0%, transparent 70%),
-        radial-gradient(ellipse 40% 30% at 80% 60%, rgba(61,244,154,0.03) 0%, transparent 60%);
-    }
-    .hero-inner {
-      position: relative; z-index: 1;
-      max-width: 1120px; margin: 0 auto; padding: 0 24px;
-      display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center;
-    }
-    .hero-label {
-      display: inline-flex; align-items: center; gap: 6px;
-      font-family: var(--mono); font-size: 11px;
-      color: var(--mint); letter-spacing: 0.08em; text-transform: uppercase;
-      background: var(--mint-dim); border: 1px solid rgba(61,244,154,0.2);
-      padding: 4px 10px; border-radius: 20px;
-      margin-bottom: 20px;
-    }
-    .hero-label-dot {
-      width: 5px; height: 5px; border-radius: 50%; background: var(--mint);
-      animation: pulse 2s infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.3; }
-    }
-    .hero h1 {
-      font-size: clamp(36px, 5vw, 58px);
-      font-weight: 800;
-      line-height: 1.1;
-      letter-spacing: -0.03em;
-      color: var(--text);
-      margin-bottom: 20px;
-    }
-    .hero h1 em {
-      font-style: normal;
-      color: var(--mint);
-    }
-    .hero-sub {
-      font-size: 17px; color: var(--muted); line-height: 1.65;
-      margin-bottom: 36px; max-width: 440px;
-    }
-    .hero-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-    .hero-note {
-      font-family: var(--mono); font-size: 11px; color: var(--muted);
-      margin-top: 16px;
-    }
-    .hero-note span { color: var(--mint); }
-
-    /* ── Browser mockup ── */
-    .mockup-wrap {
-      position: relative;
-    }
-    .mockup {
-      background: #0c0e0c;
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      overflow: hidden;
-      box-shadow:
-        0 40px 80px rgba(0,0,0,0.6),
-        0 0 0 1px rgba(255,255,255,0.04),
-        0 0 60px rgba(61,244,154,0.04);
-    }
-    .mockup-bar {
-      background: #101210;
-      border-bottom: 1px solid var(--border);
-      padding: 10px 14px;
+    .nav-links {
       display: flex; align-items: center; gap: 8px;
     }
-    .mockup-dots { display: flex; gap: 5px; }
-    .mockup-dot {
-      width: 9px; height: 9px; border-radius: 50%;
-    }
-    .mockup-dot.r { background: #ff5f56; }
-    .mockup-dot.y { background: #ffbd2e; }
-    .mockup-dot.g { background: #27c93f; }
-    .mockup-url {
-      flex: 1; background: #1a1e1a;
-      border-radius: 5px; padding: 4px 10px;
-      font-family: var(--mono); font-size: 11px; color: var(--muted);
-    }
-    .mockup-body { padding: 20px; position: relative; }
-
-    /* Chat messages in mockup */
-    .chat-msg {
-      display: flex; gap: 10px; margin-bottom: 16px;
-    }
-    .chat-avatar {
-      width: 28px; height: 28px; border-radius: 50%;
-      flex-shrink: 0; display: flex; align-items: center; justify-content: center;
-      font-size: 10px; font-weight: 700;
-    }
-    .chat-avatar.user { background: #1e3a5f; color: #60a5fa; }
-    .chat-avatar.ai   { background: #1e3a2a; color: var(--mint); }
-    .chat-bubble {
-      background: #141814;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 10px 14px;
-      font-size: 12px;
-      color: #c8d4c8;
-      line-height: 1.5;
-      max-width: 85%;
-    }
-    .chat-bubble.user-bubble {
-      background: #111d2a;
-      border-color: rgba(96,165,250,0.15);
-    }
-    .chat-code {
-      font-family: var(--mono);
-      font-size: 10px;
-      background: #0a0c0a;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 8px 10px;
-      margin-top: 6px;
-      color: #86efac;
-    }
-
-    /* Extension toolbar in mockup */
-    .ext-toolbar {
-      position: absolute;
-      bottom: 16px; right: 16px;
-      background: rgba(15,17,15,0.95);
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(61,244,154,0.2);
-      border-radius: 10px;
-      padding: 7px 10px;
-      display: flex; align-items: center; gap: 7px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.5), 0 0 16px rgba(61,244,154,0.08);
-    }
-    .ext-btn {
-      display: flex; align-items: center; gap: 5px;
-      padding: 5px 10px; border-radius: 6px;
-      font-family: var(--sans); font-size: 11px; font-weight: 600;
-      border: none; cursor: pointer;
-    }
-    .ext-btn-primary { background: var(--mint); color: #070807; }
-    .ext-btn-outline {
-      background: transparent; color: #94a3b8;
-      border: 1px solid rgba(255,255,255,0.12);
-    }
-    .ext-icon {
-      width: 13px; height: 13px;
-    }
-
-    /* ── Features ── */
-    .features { background: var(--bg); }
-    .section-label {
-      font-family: var(--mono); font-size: 11px;
-      color: var(--mint); letter-spacing: 0.1em; text-transform: uppercase;
-      margin-bottom: 12px;
-    }
-    .section-title {
-      font-size: clamp(26px, 3.5vw, 40px);
-      font-weight: 800; letter-spacing: -0.03em;
-      line-height: 1.15;
-      margin-bottom: 14px;
-    }
-    .section-sub {
-      font-size: 16px; color: var(--muted); max-width: 520px; line-height: 1.6;
-      margin-bottom: 56px;
-    }
-    .feature-grid {
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px;
-    }
-    .feature-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      padding: 28px;
-      transition: border-color 0.2s, background 0.2s;
-    }
-    .feature-card:first-child { border-radius: 12px 0 0 12px; }
-    .feature-card:last-child  { border-radius: 0 12px 12px 0; }
-    .feature-card:hover {
-      border-color: rgba(61,244,154,0.2);
-      background: #0e110e;
-    }
-    .feature-icon {
-      width: 36px; height: 36px;
-      background: var(--mint-dim);
-      border: 1px solid rgba(61,244,154,0.15);
-      border-radius: 8px;
-      display: flex; align-items: center; justify-content: center;
-      margin-bottom: 16px;
-      color: var(--mint);
-    }
-    .feature-card h3 {
-      font-size: 15px; font-weight: 700;
-      color: var(--text);
-      margin-bottom: 8px;
-    }
-    .feature-card p {
-      font-size: 13px; color: var(--muted); line-height: 1.6;
-    }
-
-    /* ── How it works ── */
-    .how { background: var(--bg); border-top: 1px solid var(--border); }
-    .steps {
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px;
-      margin-top: 48px; position: relative;
-    }
-    .steps::before {
-      content: '';
-      position: absolute; top: 22px; left: 16.6%; right: 16.6%;
-      height: 1px; background: linear-gradient(90deg, transparent, var(--mint-dim), transparent);
-    }
-    .step { text-align: center; }
-    .step-num {
-      width: 44px; height: 44px; border-radius: 50%;
-      border: 1px solid rgba(61,244,154,0.3);
-      background: var(--mint-dim);
-      color: var(--mint);
-      font-family: var(--mono); font-size: 14px; font-weight: 500;
-      display: flex; align-items: center; justify-content: center;
-      margin: 0 auto 16px;
-    }
-    .step h3 { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
-    .step p  { font-size: 13px; color: var(--muted); line-height: 1.6; }
-
-    /* ── Zero tracking section ── */
-    .trust { background: var(--bg-card); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-    .trust-grid {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center;
-    }
-    .trust-list { list-style: none; margin-top: 28px; }
-    .trust-list li {
-      display: flex; align-items: flex-start; gap: 12px;
-      padding: 14px 0;
-      border-bottom: 1px solid var(--border);
-      font-size: 14px; color: var(--muted);
-    }
-    .trust-list li:last-child { border-bottom: none; }
-    .trust-check {
-      width: 18px; height: 18px; flex-shrink: 0;
-      color: var(--mint); margin-top: 1px;
-    }
-    .trust-list li strong { color: var(--text); }
-    .trust-audit {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 28px;
-    }
-    .audit-title {
-      font-family: var(--mono); font-size: 11px;
-      color: var(--mint); text-transform: uppercase; letter-spacing: 0.08em;
-      margin-bottom: 16px;
-    }
-    .audit-row {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 10px 0;
-      border-bottom: 1px solid var(--border);
-      font-size: 13px;
-    }
-    .audit-row:last-child { border-bottom: none; }
-    .audit-label { color: var(--muted); }
-    .audit-pass {
-      font-family: var(--mono); font-size: 11px;
-      color: var(--mint); background: var(--mint-dim);
-      border: 1px solid rgba(61,244,154,0.2);
-      padding: 2px 8px; border-radius: 20px;
-    }
-    .audit-warn {
-      font-family: var(--mono); font-size: 11px;
-      color: #fbbf24; background: rgba(251,191,36,0.1);
-      border: 1px solid rgba(251,191,36,0.2);
-      padding: 2px 8px; border-radius: 20px;
-    }
-
-    /* ── Download ── */
-    .download { text-align: center; }
-    .download-card {
-      display: inline-block;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 48px 56px;
-      max-width: 680px; width: 100%;
-      text-align: left;
-      margin-top: 48px;
-    }
-    .download-steps { list-style: none; margin: 28px 0 36px; }
-    .download-steps li {
-      display: flex; gap: 14px; align-items: flex-start;
-      padding: 14px 0;
-      border-bottom: 1px solid var(--border);
-      font-size: 14px;
-    }
-    .download-steps li:last-child { border-bottom: none; }
-    .step-badge {
-      width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
-      background: var(--mint-dim); border: 1px solid rgba(61,244,154,0.3);
-      color: var(--mint);
-      font-family: var(--mono); font-size: 11px;
-      display: flex; align-items: center; justify-content: center;
-      margin-top: 1px;
-    }
-    .download-steps li div { flex: 1; }
-    .download-steps li strong { display: block; color: var(--text); font-weight: 600; margin-bottom: 3px; }
-    .download-steps li span { color: var(--muted); font-size: 13px; }
-    code {
-      font-family: var(--mono); font-size: 12px;
-      background: #0e120e;
-      border: 1px solid var(--border);
-      padding: 1px 6px; border-radius: 4px;
-      color: var(--mint);
-    }
-    .download-actions { display: flex; gap: 10px; flex-wrap: wrap; }
-
-    /* ── Footer ── */
-    footer {
-      border-top: 1px solid var(--border);
-      padding: 36px 0;
-    }
-    .footer-inner {
-      max-width: 1120px; margin: 0 auto; padding: 0 24px;
-      display: flex; justify-content: space-between; align-items: center;
-      flex-wrap: wrap; gap: 16px;
-    }
-    .footer-left {
-      font-size: 13px; color: var(--muted);
-      display: flex; align-items: center; gap: 8px;
-    }
-    .footer-right { display: flex; gap: 16px; }
-    .footer-link {
-      font-size: 13px; color: var(--muted); text-decoration: none;
+    .nav-link {
+      padding: 7px 14px; border-radius: 8px;
+      font-size: 14px; font-weight: 500; color: var(--muted);
       transition: color 0.15s;
     }
-    .footer-link:hover { color: var(--mint); }
+    .nav-link:hover { color: var(--text); }
+    .nav-cta {
+      padding: 8px 18px; border-radius: 9px;
+      background: var(--mint); color: #060D08;
+      font-size: 14px; font-weight: 600;
+      transition: all 0.15s;
+    }
+    .nav-cta:hover {
+      background: #52F7A5;
+      box-shadow: 0 4px 16px var(--mint-glow);
+      transform: translateY(-1px);
+    }
 
-    /* ── Permissions table ── */
-    .perms {
-      width: 100%; border-collapse: collapse;
-      font-size: 13px; margin-top: 28px;
+    /* ── HERO ────────────────────────────────────── */
+    .hero {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      align-items: center;
+      gap: 60px;
+      padding: 120px 80px 80px;
+      max-width: 1280px;
+      margin: 0 auto;
     }
-    .perms th {
-      text-align: left; padding: 10px 16px;
-      font-family: var(--mono); font-size: 11px;
-      color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em;
+    .hero-left { display: flex; flex-direction: column; gap: 28px; }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 14px; border-radius: 20px;
+      border: 1px solid rgba(61,244,154,0.25);
+      background: var(--mint-dim);
+      font-size: 12px; font-weight: 600;
+      color: var(--mint); letter-spacing: 0.04em;
+      text-transform: uppercase; width: fit-content;
+    }
+    .hero-badge-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--mint); animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%,100% { opacity: 1; } 50% { opacity: 0.4; }
+    }
+    .hero-title {
+      font-size: clamp(38px, 5vw, 60px);
+      font-weight: 800;
+      line-height: 1.08;
+      letter-spacing: -0.04em;
+      color: var(--text);
+    }
+    .hero-title em {
+      font-style: normal;
+      background: linear-gradient(135deg, var(--mint), #7BFFC0);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero-sub {
+      font-size: 18px; line-height: 1.65;
+      color: var(--muted); max-width: 460px;
+    }
+    .hero-actions {
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    }
+    .btn-primary {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 13px 26px; border-radius: 11px;
+      background: var(--mint); color: #060D08;
+      font-size: 15px; font-weight: 700;
+      box-shadow: 0 2px 0 rgba(0,0,0,0.2), 0 4px 20px var(--mint-glow);
+      transition: all 0.16s;
+    }
+    .btn-primary:hover {
+      background: #52F7A5;
+      box-shadow: 0 2px 0 rgba(0,0,0,0.2), 0 8px 28px var(--mint-glow);
+      transform: translateY(-2px);
+    }
+    .btn-secondary {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 22px; border-radius: 11px;
+      border: 1px solid var(--border);
+      background: var(--surf);
+      color: var(--muted); font-size: 15px; font-weight: 500;
+      transition: all 0.16s;
+    }
+    .btn-secondary:hover {
+      border-color: rgba(255,255,255,0.14);
+      color: var(--text); background: var(--surf2);
+    }
+    .hero-browsers {
+      display: flex; align-items: center; gap: 10px;
+      flex-wrap: wrap;
+    }
+    .hero-browsers-label {
+      font-size: 12px; color: var(--faint); font-weight: 500;
+    }
+    .browser-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px; border-radius: 20px;
+      background: var(--surf); border: 1px solid var(--border);
+      font-size: 12px; font-weight: 500; color: var(--muted);
+    }
+    .browser-pill-dot {
+      width: 5px; height: 5px; border-radius: 50%;
+    }
+    .dot-chrome  { background: #4D90FE; }
+    .dot-firefox { background: #FF9500; }
+    .dot-edge    { background: #0078D4; }
+    .dot-brave   { background: #FB542B; }
+    .dot-opera   { background: #FF1B2D; }
+    .dot-safari  { background: #006CFF; }
+
+    /* ── BROWSER MOCKUP ──────────────────────────── */
+    .hero-right { position: relative; }
+    .mockup-browser {
+      background: var(--surf);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow:
+        0 0 0 1px rgba(0,0,0,0.5),
+        0 32px 80px rgba(0,0,0,0.6),
+        0 8px 24px rgba(0,0,0,0.4);
+    }
+    .mockup-chrome-bar {
+      background: #18191A;
+      padding: 10px 14px;
+      display: flex; align-items: center; gap: 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .chrome-dots { display: flex; gap: 5px; }
+    .chrome-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+    }
+    .cd-r { background: #FF5F56; }
+    .cd-y { background: #FFBD2E; }
+    .cd-g { background: #27C93F; }
+    .chrome-url {
+      flex: 1; background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 6px; padding: 4px 12px;
+      font-family: var(--mono); font-size: 11px; color: var(--faint);
+    }
+    .mockup-content {
+      padding: 20px;
+      min-height: 400px;
+      position: relative;
+      background: #16171A;
+      display: flex; flex-direction: column; gap: 16px;
+    }
+    /* Chat messages */
+    .mock-msg {
+      display: flex; gap: 12px; align-items: flex-start;
+    }
+    .mock-avatar {
+      width: 28px; height: 28px; border-radius: 8px;
+      flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700;
+    }
+    .mock-avatar-user { background: #2D3748; color: #94A3B8; }
+    .mock-avatar-ai   { background: var(--mint-dim); color: var(--mint); border: 1px solid rgba(61,244,154,0.2); }
+    .mock-bubble {
+      background: var(--surf);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px; padding: 10px 14px;
+      font-size: 13px; line-height: 1.6; color: #CBD5E1;
+      max-width: 340px;
+    }
+    .mock-bubble-ai { background: rgba(20,22,26,0.8); }
+    .mock-line {
+      height: 9px; border-radius: 5px;
+      background: rgba(255,255,255,0.07); margin-bottom: 5px;
+    }
+    .mock-line:last-child { margin-bottom: 0; width: 70%; }
+
+    /* The toolbar floating on the mockup */
+    .mock-toolbar {
+      position: absolute;
+      bottom: 18px; right: 18px;
+      display: flex; align-items: center; gap: 6px;
+      padding: 7px 9px;
+      background: rgba(10,10,10,0.96);
+      backdrop-filter: blur(18px);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 13px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4);
+      animation: toolbar-float 4s ease-in-out infinite;
+    }
+    @keyframes toolbar-float {
+      0%,100% { transform: translateY(0); }
+      50%      { transform: translateY(-4px); }
+    }
+    .mock-btn-primary {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 6px 12px; border-radius: 8px;
+      background: var(--mint); color: #060D08;
+      font-size: 12px; font-weight: 700;
+      animation: btn-glow 3s ease-in-out infinite;
+    }
+    @keyframes btn-glow {
+      0%,100% { box-shadow: 0 2px 8px rgba(61,244,154,0.2); }
+      50%      { box-shadow: 0 2px 16px rgba(61,244,154,0.45); }
+    }
+    .mock-btn-ghost {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 6px 10px; border-radius: 8px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      font-size: 12px; font-weight: 500; color: #94A3B8;
+    }
+    .mock-btn-icon {
+      padding: 6px 7px; border-radius: 8px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: #64748B; line-height: 0;
+    }
+    .mockup-glow {
+      position: absolute; bottom: -60px; right: -60px;
+      width: 300px; height: 300px; border-radius: 50%;
+      background: radial-gradient(circle, var(--mint-glow) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    /* ── FEATURES ────────────────────────────────── */
+    .section {
+      padding: 100px 80px;
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+    .section-label {
+      font-size: 12px; font-weight: 600;
+      color: var(--mint); letter-spacing: 0.08em;
+      text-transform: uppercase; margin-bottom: 14px;
+    }
+    .section-title {
+      font-size: clamp(28px, 3.5vw, 44px);
+      font-weight: 800; letter-spacing: -0.04em;
+      line-height: 1.1; margin-bottom: 56px;
+    }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2px;
+    }
+    .feature-card {
+      padding: 32px;
+      background: var(--surf);
+      border: 1px solid var(--border);
+      transition: background 0.2s;
+    }
+    .feature-card:hover { background: var(--surf2); }
+    .feature-card:first-child { border-radius: 16px 0 0 16px; }
+    .feature-card:last-child  { border-radius: 0 16px 16px 0; }
+    .feature-icon {
+      width: 44px; height: 44px; border-radius: 11px;
+      background: var(--mint-dim);
+      border: 1px solid rgba(61,244,154,0.15);
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 20px; color: var(--mint);
+    }
+    .feature-title {
+      font-size: 17px; font-weight: 700;
+      letter-spacing: -0.02em; margin-bottom: 10px;
+    }
+    .feature-desc { font-size: 14px; line-height: 1.7; color: var(--muted); }
+
+    /* ── HOW IT WORKS ────────────────────────────── */
+    .how-section {
+      padding: 100px 80px;
+      background: var(--surf);
+      border-top: 1px solid var(--border);
       border-bottom: 1px solid var(--border);
-      font-weight: 500;
     }
-    .perms td {
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--border);
-      vertical-align: top;
+    .how-inner { max-width: 1280px; margin: 0 auto; }
+    .steps { display: grid; grid-template-columns: repeat(4,1fr); gap: 0; }
+    .step {
+      padding: 32px;
+      border-right: 1px solid var(--border);
+      position: relative;
     }
-    .perms tr:last-child td { border-bottom: none; }
-    .perms td:first-child {
-      font-family: var(--mono); font-size: 12px;
+    .step:last-child { border-right: none; }
+    .step-num {
+      font-family: var(--mono);
+      font-size: 11px; font-weight: 500;
+      color: var(--mint); letter-spacing: 0.05em;
+      margin-bottom: 16px;
+    }
+    .step-title {
+      font-size: 16px; font-weight: 700;
+      letter-spacing: -0.02em; margin-bottom: 8px;
+    }
+    .step-desc { font-size: 13px; line-height: 1.65; color: var(--muted); }
+    .step-connector {
+      position: absolute; top: 48px; right: -1px;
+      width: 24px; height: 24px;
+      background: var(--surf);
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--mint); z-index: 1;
+    }
+
+    /* ── BROWSER SUPPORT ─────────────────────────── */
+    .browsers-grid {
+      display: grid;
+      grid-template-columns: repeat(3,1fr);
+      gap: 2px;
+    }
+    .browser-card {
+      padding: 28px 32px;
+      background: var(--surf);
+      border: 1px solid var(--border);
+      display: flex; align-items: center; gap: 16px;
+    }
+    .browser-card:nth-child(1) { border-radius: 16px 0 0 0; }
+    .browser-card:nth-child(3) { border-radius: 0 16px 0 0; }
+    .browser-card:nth-child(4) { border-radius: 0 0 0 16px; }
+    .browser-card:nth-child(6) { border-radius: 0 0 16px 0; }
+    .browser-icon {
+      width: 40px; height: 40px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; flex-shrink: 0;
+    }
+    .browser-info { flex: 1; }
+    .browser-name { font-size: 15px; font-weight: 700; letter-spacing: -0.02em; }
+    .browser-method { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .browser-badge {
+      font-size: 11px; font-weight: 600; padding: 3px 9px;
+      border-radius: 20px;
+    }
+    .badge-silent {
+      background: var(--mint-dim);
       color: var(--mint);
+      border: 1px solid rgba(61,244,154,0.2);
     }
-    .perms td:last-child { color: var(--muted); }
-
-    /* ── Reveal animation ── */
-    .reveal {
-      opacity: 0; transform: translateY(18px);
-      transition: opacity 0.5s ease, transform 0.5s ease;
-    }
-    .reveal.visible {
-      opacity: 1; transform: translateY(0);
+    .badge-dialog {
+      background: rgba(100,116,139,0.1);
+      color: var(--muted);
+      border: 1px solid var(--border);
     }
 
-    /* ── Responsive ── */
-    @media (max-width: 860px) {
-      .hero-inner { grid-template-columns: 1fr; }
-      .mockup-wrap { display: none; }
-      .feature-grid { grid-template-columns: 1fr; gap: 2px; }
-      .feature-card:first-child { border-radius: 12px 12px 0 0; }
-      .feature-card:last-child  { border-radius: 0 0 12px 12px; }
-      .steps { grid-template-columns: 1fr; gap: 28px; }
-      .steps::before { display: none; }
-      .trust-grid { grid-template-columns: 1fr; }
-      .download-card { padding: 28px 24px; }
+    /* ── CTA SECTION ─────────────────────────────── */
+    .cta-section {
+      padding: 120px 80px;
+      max-width: 800px; margin: 0 auto;
+      text-align: center;
     }
-    @media (max-width: 540px) {
-      section { padding: 70px 0; }
-      .hero { padding-top: 120px; }
-      .nav-links .btn-ghost { display: none; }
+    .cta-title {
+      font-size: clamp(32px,4vw,52px);
+      font-weight: 800; letter-spacing: -0.04em;
+      line-height: 1.1; margin-bottom: 20px;
+    }
+    .cta-sub {
+      font-size: 17px; color: var(--muted); margin-bottom: 36px;
+    }
+    .cta-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+    /* ── FOOTER ──────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 40px 80px;
+      display: flex; align-items: center; justify-content: space-between;
+      max-width: 1280px; margin: 0 auto;
+    }
+    .footer-logo {
+      display: flex; align-items: center; gap: 8px;
+      font-weight: 700; font-size: 15px; letter-spacing: -0.02em;
+    }
+    .footer-links { display: flex; gap: 24px; }
+    .footer-link {
+      font-size: 14px; color: var(--faint);
+      transition: color 0.15s;
+    }
+    .footer-link:hover { color: var(--muted); }
+    .footer-copy { font-size: 13px; color: var(--faint); }
+
+    /* ── DIVIDER LINE ────────────────────────────── */
+    .divider { max-width: 1280px; margin: 0 auto; padding: 0 80px; }
+    .divider hr { border: none; border-top: 1px solid var(--border); }
+
+    /* ── RESPONSIVE ──────────────────────────────── */
+    @media (max-width: 900px) {
+      nav { padding: 0 24px; }
+      nav .nav-links { display: none; }
+      .hero { grid-template-columns: 1fr; padding: 100px 24px 60px; gap: 48px; }
+      .hero-right { display: none; }
+      .section { padding: 72px 24px; }
+      .features-grid { grid-template-columns: 1fr; gap: 2px; }
+      .feature-card:first-child { border-radius: 16px 16px 0 0; }
+      .feature-card:last-child  { border-radius: 0 0 16px 16px; }
+      .how-section { padding: 72px 24px; }
+      .steps { grid-template-columns: 1fr; }
+      .step { border-right: none; border-bottom: 1px solid var(--border); }
+      .step:last-child { border-bottom: none; }
+      .step-connector { display: none; }
+      .browsers-grid { grid-template-columns: 1fr; }
+      .browser-card { border-radius: 0 !important; }
+      .browser-card:first-child { border-radius: 16px 16px 0 0 !important; }
+      .browser-card:last-child  { border-radius: 0 0 16px 16px !important; }
+      .cta-section { padding: 80px 24px; }
+      footer { flex-direction: column; gap: 20px; padding: 40px 24px; text-align: center; }
+      .footer-links { flex-wrap: wrap; justify-content: center; }
+      .divider { padding: 0 24px; }
     }
   </style>
 </head>
 <body>
 
-<!-- ── Nav ── -->
+<!-- NAV -->
 <nav>
-  <div class="nav-inner">
-    <a class="nav-logo" href="#">
-      <span class="nav-logo-dot"></span>
-      DeepSeek Exporter
-    </a>
-    <div class="nav-links">
-      <a class="btn btn-ghost" href="https://github.com/mahtamun-hoque-fahim/deepseek-exporter" target="_blank" rel="noopener">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.02 10.02 0 0 0 22 12.017C22 6.484 17.522 2 12 2z"/></svg>
-        GitHub
-      </a>
-      <a class="btn btn-primary" href="#download">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Install
-      </a>
-    </div>
+  <a href="/" class="nav-logo">
+    <span class="nav-logo-dot"></span>
+    PaperSeek
+  </a>
+  <div class="nav-links">
+    <a href="#features" class="nav-link">Features</a>
+    <a href="#how" class="nav-link">How it works</a>
+    <a href="https://github.com/mahtamun-hoque-fahim/deepseek-exporter" target="_blank" class="nav-link">GitHub</a>
+    <a href="download.html" class="nav-cta">Get it free</a>
   </div>
 </nav>
 
-<!-- ── Hero ── -->
-<div class="hero">
-  <div class="hero-bg"></div>
-  <div class="hero-inner">
-    <div>
-      <div class="hero-label">
-        <span class="hero-label-dot"></span>
-        Open source &mdash; v1.0.0
-      </div>
-      <h1>Export your<br><em>DeepSeek</em> chats<br>to PDF.</h1>
-      <p class="hero-sub">
-        A Chrome extension that adds a one-click PDF export button directly inside DeepSeek.
-        Select specific messages or export the full conversation.
-      </p>
-      <div class="hero-actions">
-        <a class="btn btn-primary" href="#download">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          Download Extension
-        </a>
-        <a class="btn btn-ghost" href="https://github.com/mahtamun-hoque-fahim/deepseek-exporter" target="_blank" rel="noopener">View Source</a>
-      </div>
-      <p class="hero-note">No tracking. No paywall. <span>Zero external calls.</span></p>
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-left">
+    <span class="hero-badge">
+      <span class="hero-badge-dot"></span>
+      Free &amp; open source
+    </span>
+    <h1 class="hero-title">
+      Your DeepSeek chats,<br>
+      <em>on paper.</em>
+    </h1>
+    <p class="hero-sub">
+      Export any conversation to a clean, high-quality PDF in one click.
+      Select individual messages or export the full chat.
+      No account. No paywall. No data sent anywhere.
+    </p>
+    <div class="hero-actions">
+      <a href="download.html" class="btn-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Install free
+      </a>
+      <a href="https://github.com/mahtamun-hoque-fahim/deepseek-exporter" target="_blank" class="btn-secondary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+        View on GitHub
+      </a>
     </div>
-
-    <!-- Browser mockup -->
-    <div class="mockup-wrap">
-      <div class="mockup">
-        <div class="mockup-bar">
-          <div class="mockup-dots">
-            <div class="mockup-dot r"></div>
-            <div class="mockup-dot y"></div>
-            <div class="mockup-dot g"></div>
-          </div>
-          <div class="mockup-url">chat.deepseek.com</div>
-        </div>
-        <div class="mockup-body">
-          <div class="chat-msg">
-            <div class="chat-avatar user">U</div>
-            <div class="chat-bubble user-bubble">
-              Explain the difference between TCP and UDP in simple terms.
-            </div>
-          </div>
-          <div class="chat-msg">
-            <div class="chat-avatar ai">DS</div>
-            <div class="chat-bubble">
-              TCP is like sending a certified letter — you get confirmation it arrived.
-              UDP is like dropping a postcard in the mailbox — faster, but no guarantee.
-              <div class="chat-code">TCP: connection-oriented, ordered, guaranteed<br>UDP: connectionless, unordered, best-effort</div>
-            </div>
-          </div>
-          <div class="chat-msg">
-            <div class="chat-avatar user">U</div>
-            <div class="chat-bubble user-bubble">
-              When would you use UDP over TCP?
-            </div>
-          </div>
-          <div class="chat-msg" style="opacity:0.5;">
-            <div class="chat-avatar ai">DS</div>
-            <div class="chat-bubble" style="width:70%; height:10px; background:#1a1e1a;"></div>
-          </div>
-
-          <!-- Extension toolbar -->
-          <div class="ext-toolbar">
-            <button class="ext-btn ext-btn-primary">
-              <svg class="ext-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>
-              Export PDF
-            </button>
-            <button class="ext-btn ext-btn-outline">
-              <svg class="ext-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-              Select
-            </button>
-            <button class="ext-btn ext-btn-outline" style="padding:5px 7px;">
-              <svg class="ext-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-            </button>
-          </div>
-        </div>
-      </div>
+    <div class="hero-browsers">
+      <span class="hero-browsers-label">Works on</span>
+      <span class="browser-pill"><span class="browser-pill-dot dot-chrome"></span>Chrome</span>
+      <span class="browser-pill"><span class="browser-pill-dot dot-firefox"></span>Firefox</span>
+      <span class="browser-pill"><span class="browser-pill-dot dot-edge"></span>Edge</span>
+      <span class="browser-pill"><span class="browser-pill-dot dot-brave"></span>Brave</span>
+      <span class="browser-pill"><span class="browser-pill-dot dot-opera"></span>Opera</span>
+      <span class="browser-pill"><span class="browser-pill-dot dot-safari"></span>Safari</span>
     </div>
   </div>
-</div>
 
-<!-- ── Features ── -->
-<section class="features">
-  <div class="wrap">
-    <div class="reveal">
-      <div class="section-label">Features</div>
-      <h2 class="section-title">Everything you need,<br>nothing you don't.</h2>
-      <p class="section-sub">Built from a clean-room rewrite. The core PDF engine, rebuilt in 6KB of vanilla JS.</p>
-    </div>
-    <div class="feature-grid reveal">
-      <div class="feature-card">
-        <div class="feature-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+  <!-- Browser mockup -->
+  <div class="hero-right">
+    <div class="mockup-browser">
+      <div class="mockup-chrome-bar">
+        <div class="chrome-dots">
+          <div class="chrome-dot cd-r"></div>
+          <div class="chrome-dot cd-y"></div>
+          <div class="chrome-dot cd-g"></div>
         </div>
-        <h3>Full conversation export</h3>
-        <p>One click exports the entire chat — user messages, AI responses, code blocks, and all formatting — as a high-fidelity PDF.</p>
+        <div class="chrome-url">chat.deepseek.com</div>
       </div>
-      <div class="feature-card">
-        <div class="feature-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      <div class="mockup-content">
+        <!-- User msg -->
+        <div class="mock-msg">
+          <div class="mock-avatar mock-avatar-user">U</div>
+          <div class="mock-bubble">Explain transformer attention in 3 sentences.</div>
         </div>
-        <h3>Selective export</h3>
-        <p>Switch to select mode and pick exactly which messages to include. Export just the answer you need, not the whole thread.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <!-- AI msg -->
+        <div class="mock-msg">
+          <div class="mock-avatar mock-avatar-ai">DS</div>
+          <div class="mock-bubble mock-bubble-ai">
+            <div class="mock-line" style="width:100%"></div>
+            <div class="mock-line" style="width:88%"></div>
+            <div class="mock-line" style="width:94%"></div>
+            <div class="mock-line"></div>
+          </div>
         </div>
-        <h3>Configurable output</h3>
-        <p>Paper size (A4, A5, Letter), portrait or landscape, custom filename, margins, and scale. Settings persist between sessions.</p>
+        <!-- User msg -->
+        <div class="mock-msg">
+          <div class="mock-avatar mock-avatar-user">U</div>
+          <div class="mock-bubble">What about multi-head attention?</div>
+        </div>
+        <!-- AI msg -->
+        <div class="mock-msg">
+          <div class="mock-avatar mock-avatar-ai">DS</div>
+          <div class="mock-bubble mock-bubble-ai">
+            <div class="mock-line" style="width:95%"></div>
+            <div class="mock-line" style="width:80%"></div>
+            <div class="mock-line"></div>
+          </div>
+        </div>
+
+        <!-- PaperSeek toolbar floating -->
+        <div class="mock-toolbar">
+          <div class="mock-btn-primary">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>
+            Export PDF
+          </div>
+          <div class="mock-btn-ghost">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            Select
+          </div>
+          <div class="mock-btn-icon">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </div>
+        </div>
+        <div class="mockup-glow"></div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ── How it works ── -->
-<section class="how">
-  <div class="wrap">
-    <div class="reveal">
-      <div class="section-label">How it works</div>
-      <h2 class="section-title">Three steps.</h2>
-      <p class="section-sub">Load the extension, open DeepSeek, export. No account required.</p>
+<!-- FEATURES -->
+<div class="divider"><hr></div>
+<section class="section" id="features">
+  <div class="section-label">Features</div>
+  <h2 class="section-title">Everything you need,<br>nothing you don't</h2>
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      </div>
+      <div class="feature-title">High-quality PDF output</div>
+      <p class="feature-desc">Uses Chrome's native print engine for pixel-perfect rendering — code blocks, math, images, all preserved exactly as they appear in chat.</p>
     </div>
-    <div class="steps reveal">
+    <div class="feature-card">
+      <div class="feature-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      </div>
+      <div class="feature-title">Select specific messages</div>
+      <p class="feature-desc">Enter select mode to cherry-pick exactly which messages make it into the PDF. Keep the useful parts, skip the noise.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+      </div>
+      <div class="feature-title">Full export control</div>
+      <p class="feature-desc">A4, A5, or Letter. Portrait or landscape. Custom filename, margin, and scale — all saved between sessions.</p>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how-section" id="how">
+  <div class="how-inner">
+    <div class="section-label">How it works</div>
+    <h2 class="section-title">Three clicks to a PDF</h2>
+    <div class="steps">
       <div class="step">
         <div class="step-num">01</div>
-        <h3>Install unpacked</h3>
-        <p>Download the repo, go to <code>chrome://extensions</code>, enable Developer Mode, and load the folder.</p>
+        <div class="step-title">Install the extension</div>
+        <p class="step-desc">One click from the Chrome Web Store, Firefox Add-ons, or load unpacked from the GitHub repo.</p>
+        <div class="step-connector">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
       </div>
       <div class="step">
         <div class="step-num">02</div>
-        <h3>Open DeepSeek</h3>
-        <p>Visit <code>chat.deepseek.com</code>. The export toolbar appears at the bottom-right of any conversation.</p>
+        <div class="step-title">Open any DeepSeek chat</div>
+        <p class="step-desc">The PaperSeek toolbar appears automatically at the bottom-right of every conversation.</p>
+        <div class="step-connector">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
       </div>
       <div class="step">
         <div class="step-num">03</div>
-        <h3>Click Export PDF</h3>
-        <p>Hit the button. The PDF is generated locally using the Chrome Debugger API and saved to your downloads.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ── Trust / Zero tracking ── -->
-<section class="trust">
-  <div class="wrap">
-    <div class="trust-grid">
-      <div class="reveal">
-        <div class="section-label">Audit</div>
-        <h2 class="section-title">Nothing hidden inside.</h2>
-        <p style="font-size:15px;color:var(--muted);margin-top:12px;line-height:1.65;">
-          The original extension this was rebuilt from contained a tracking pixel, a paywall iframe injected into DeepSeek,
-          and a remote CSS control endpoint. Every one of those was removed.
-        </p>
-        <ul class="trust-list">
-          <li>
-            <svg class="trust-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            <div><strong>No analytics or tracking.</strong> No UUID on install, no event pings, no usage data.</div>
-          </li>
-          <li>
-            <svg class="trust-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            <div><strong>No external iframes.</strong> The paywall iframe injected into DeepSeek is gone.</div>
-          </li>
-          <li>
-            <svg class="trust-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            <div><strong>No remote control.</strong> No external API that could change what the extension reads.</div>
-          </li>
-          <li>
-            <svg class="trust-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            <div><strong>Scoped permissions.</strong> Only requests access to <code>chat.deepseek.com</code>, not all URLs.</div>
-          </li>
-        </ul>
-      </div>
-      <div class="reveal">
-        <div class="trust-audit">
-          <div class="audit-title">Security audit results</div>
-          <div class="audit-row">
-            <span class="audit-label">eval() usage</span>
-            <span class="audit-pass">None found</span>
-          </div>
-          <div class="audit-row">
-            <span class="audit-label">External fetch calls</span>
-            <span class="audit-pass">None found</span>
-          </div>
-          <div class="audit-row">
-            <span class="audit-label">Chat content exfiltration</span>
-            <span class="audit-pass">None found</span>
-          </div>
-          <div class="audit-row">
-            <span class="audit-label">Hidden base64 payloads</span>
-            <span class="audit-pass">None found</span>
-          </div>
-          <div class="audit-row">
-            <span class="audit-label">Third-party iframes</span>
-            <span class="audit-pass">None found</span>
-          </div>
-          <div class="audit-row">
-            <span class="audit-label">host_permissions scope</span>
-            <span class="audit-pass">chat.deepseek.com only</span>
-          </div>
-          <div class="audit-row">
-            <span class="audit-label">externally_connectable</span>
-            <span class="audit-pass">Removed</span>
-          </div>
-          <div class="audit-row" style="border-bottom:none;">
-            <span class="audit-label">Bundle size</span>
-            <span class="audit-pass">6KB vs 225KB original</span>
-          </div>
-        </div>
-
-        <!-- Permissions table -->
-        <table class="perms">
-          <thead>
-            <tr>
-              <th>Permission</th>
-              <th>Why it's needed</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>debugger</td>
-              <td>Required for <code>Page.printToPDF</code> via Chrome DevTools Protocol — the only way to generate a high-quality PDF from an extension.</td>
-            </tr>
-            <tr>
-              <td>downloads</td>
-              <td>To save the generated PDF to your Downloads folder.</td>
-            </tr>
-            <tr>
-              <td>tabs</td>
-              <td>To get the current tab ID for the debugger attachment.</td>
-            </tr>
-            <tr>
-              <td>storage</td>
-              <td>To remember your settings (paper size, filename, etc.) between sessions.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ── Download ── -->
-<section class="download" id="download">
-  <div class="wrap">
-    <div class="reveal">
-      <div class="section-label">Install</div>
-      <h2 class="section-title">Get the extension.</h2>
-      <p class="section-sub">Load it directly from source — no Chrome Web Store required.</p>
-    </div>
-    <div class="reveal">
-      <div class="download-card">
-        <h3 style="font-size:18px;font-weight:700;margin-bottom:6px;">Load unpacked in Chrome or Brave</h3>
-        <p style="font-size:13px;color:var(--muted);margin-bottom:0;">Takes about 60 seconds.</p>
-        <ol class="download-steps">
-          <li>
-            <div class="step-badge">1</div>
-            <div>
-              <strong>Download the source</strong>
-              <span>Click the button below to download a ZIP from GitHub, or clone the repo.</span>
-            </div>
-          </li>
-          <li>
-            <div class="step-badge">2</div>
-            <div>
-              <strong>Open the extensions page</strong>
-              <span>In Chrome or Brave, navigate to <code>chrome://extensions</code> or <code>brave://extensions</code>.</span>
-            </div>
-          </li>
-          <li>
-            <div class="step-badge">3</div>
-            <div>
-              <strong>Enable Developer Mode</strong>
-              <span>Toggle the switch in the top-right corner of the extensions page.</span>
-            </div>
-          </li>
-          <li>
-            <div class="step-badge">4</div>
-            <div>
-              <strong>Load unpacked</strong>
-              <span>Click "Load unpacked" and select the downloaded/cloned folder.</span>
-            </div>
-          </li>
-          <li>
-            <div class="step-badge">5</div>
-            <div>
-              <strong>Open DeepSeek</strong>
-              <span>Go to <code>chat.deepseek.com</code> — the toolbar appears at the bottom-right automatically.</span>
-            </div>
-          </li>
-        </ol>
-        <div class="download-actions">
-          <a class="btn btn-primary" href="https://github.com/mahtamun-hoque-fahim/deepseek-exporter/archive/refs/heads/main.zip">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Download ZIP
-          </a>
-          <a class="btn btn-ghost" href="https://github.com/mahtamun-hoque-fahim/deepseek-exporter" target="_blank" rel="noopener">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.02 10.02 0 0 0 22 12.017C22 6.484 17.522 2 12 2z"/></svg>
-            View on GitHub
-          </a>
+        <div class="step-title">Choose messages (optional)</div>
+        <p class="step-desc">Click Select to handpick which messages to export, or skip this step to export the full conversation.</p>
+        <div class="step-connector">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
         </div>
       </div>
+      <div class="step">
+        <div class="step-num">04</div>
+        <div class="step-title">Export PDF</div>
+        <p class="step-desc">Hit Export PDF. The file downloads instantly — no upload, no server, no waiting. Your chat stays yours.</p>
+      </div>
     </div>
   </div>
 </section>
 
-<!-- ── Footer ── -->
+<!-- BROWSER SUPPORT -->
+<section class="section">
+  <div class="section-label">Compatibility</div>
+  <h2 class="section-title">Works on every major browser</h2>
+  <div class="browsers-grid">
+    <div class="browser-card">
+      <div class="browser-icon" style="background:rgba(77,144,254,0.1)">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="#4D90FE"><circle cx="12" cy="12" r="10" fill="none" stroke="#4D90FE" stroke-width="1.5"/><circle cx="12" cy="12" r="4" fill="#4D90FE"/><path d="M12 2a10 10 0 0 1 8.66 5H3.34A10 10 0 0 1 12 2z" fill="#4D90FE" opacity="0.5"/></svg>
+      </div>
+      <div class="browser-info">
+        <div class="browser-name">Chrome</div>
+        <div class="browser-method">Silent PDF download</div>
+      </div>
+      <span class="browser-badge badge-silent">Auto</span>
+    </div>
+    <div class="browser-card">
+      <div class="browser-icon" style="background:rgba(0,120,212,0.1)">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" fill="#0078D4" opacity="0.2"/><path d="M12 6c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6z" fill="#0078D4"/></svg>
+      </div>
+      <div class="browser-info">
+        <div class="browser-name">Edge</div>
+        <div class="browser-method">Silent PDF download</div>
+      </div>
+      <span class="browser-badge badge-silent">Auto</span>
+    </div>
+    <div class="browser-card">
+      <div class="browser-icon" style="background:rgba(251,84,43,0.1)">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#FB542B" opacity="0.15"/><path d="M8 8l8 8M16 8l-8 8" stroke="#FB542B" stroke-width="2.5" stroke-linecap="round"/></svg>
+      </div>
+      <div class="browser-info">
+        <div class="browser-name">Brave</div>
+        <div class="browser-method">Silent PDF download</div>
+      </div>
+      <span class="browser-badge badge-silent">Auto</span>
+    </div>
+    <div class="browser-card">
+      <div class="browser-icon" style="background:rgba(255,29,45,0.1)">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#FF1B2D" opacity="0.15"/><circle cx="12" cy="12" r="5" fill="#FF1B2D" opacity="0.6"/></svg>
+      </div>
+      <div class="browser-info">
+        <div class="browser-name">Opera</div>
+        <div class="browser-method">Silent PDF download</div>
+      </div>
+      <span class="browser-badge badge-silent">Auto</span>
+    </div>
+    <div class="browser-card">
+      <div class="browser-icon" style="background:rgba(255,149,0,0.1)">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#FF9500" opacity="0.15"/><path d="M12 7v5l3 3" stroke="#FF9500" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+      <div class="browser-info">
+        <div class="browser-name">Firefox</div>
+        <div class="browser-method">System print dialog</div>
+      </div>
+      <span class="browser-badge badge-dialog">Dialog</span>
+    </div>
+    <div class="browser-card">
+      <div class="browser-icon" style="background:rgba(0,108,255,0.1)">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#006CFF" opacity="0.15"/><path d="M8 12h8M12 8v8" stroke="#006CFF" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+      <div class="browser-info">
+        <div class="browser-name">Safari</div>
+        <div class="browser-method">System print dialog</div>
+      </div>
+      <span class="browser-badge badge-dialog">Dialog</span>
+    </div>
+  </div>
+</section>
+
+<!-- FINAL CTA -->
+<div class="divider"><hr></div>
+<section class="cta-section">
+  <div class="section-label" style="text-align:center">Open source</div>
+  <h2 class="cta-title">Start saving your chats today</h2>
+  <p class="cta-sub">Free forever. No account required. Built on the open web.</p>
+  <div class="cta-actions">
+    <a href="download.html" class="btn-primary">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Install free
+    </a>
+    <a href="https://github.com/mahtamun-hoque-fahim/deepseek-exporter" target="_blank" class="btn-secondary">View source on GitHub</a>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<div class="divider"><hr></div>
 <footer>
-  <div class="footer-inner">
-    <div class="footer-left">
-      <span class="nav-logo-dot" style="width:6px;height:6px;"></span>
-      DeepSeek Exporter &mdash; MIT License
-    </div>
-    <div class="footer-right">
-      <a class="footer-link" href="https://github.com/mahtamun-hoque-fahim/deepseek-exporter" target="_blank" rel="noopener">GitHub</a>
-      <a class="footer-link" href="https://github.com/mahtamun-hoque-fahim/deepseek-exporter/issues" target="_blank" rel="noopener">Report Issue</a>
-      <a class="footer-link" href="https://github.com/mahtamun-hoque-fahim/deepseek-exporter/blob/main/README.md" target="_blank" rel="noopener">Docs</a>
-    </div>
+  <div class="footer-logo">
+    <span class="nav-logo-dot"></span>
+    PaperSeek
   </div>
+  <div class="footer-links">
+    <a href="download.html" class="footer-link">Download</a>
+    <a href="https://github.com/mahtamun-hoque-fahim/deepseek-exporter" target="_blank" class="footer-link">GitHub</a>
+    <a href="https://github.com/mahtamun-hoque-fahim/deepseek-exporter/issues" target="_blank" class="footer-link">Report a bug</a>
+  </div>
+  <span class="footer-copy">Built by Fahim</span>
 </footer>
 
-<script>
-  // Scroll reveal
-  const els = document.querySelectorAll('.reveal');
-  const io = new IntersectionObserver((entries) => {
-    entries.forEach(e => {
-      if (e.isIntersecting) {
-        e.target.classList.add('visible');
-        io.unobserve(e.target);
-      }
-    });
-  }, { threshold: 0.1 });
-  els.forEach(el => io.observe(el));
-
-  // Respect reduced motion
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    document.querySelectorAll('.reveal').forEach(el => el.classList.add('visible'));
-  }
-</script>
 </body>
 </html>

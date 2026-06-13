@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Install PaperSeek — Export DeepSeek chats to PDF</title>
+  <meta name="description" content="Install PaperSeek on Chrome, Firefox, Edge, Brave, Opera, or Safari. Step-by-step instructions for every browser.">
+  <link rel="icon" href="../icons/32.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #08090A;
+      --surf:     #111213;
+      --surf2:    #191A1B;
+      --border:   rgba(255,255,255,0.07);
+      --mint:     #3DF49A;
+      --mint-dim: rgba(61,244,154,0.10);
+      --text:     #F1F5F9;
+      --muted:    #64748B;
+      --faint:    #374151;
+      --font:     'Plus Jakarta Sans', system-ui, sans-serif;
+      --mono:     'JetBrains Mono', monospace;
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 16px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+    a { color: inherit; text-decoration: none; }
+
+    /* ── NAV ─────────────────────────────────────── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 40px; height: 60px;
+      background: rgba(8,9,10,0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-logo {
+      display: flex; align-items: center; gap: 10px;
+      font-weight: 700; font-size: 17px; letter-spacing: -0.03em;
+    }
+    .nav-logo-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--mint);
+      box-shadow: 0 0 8px rgba(61,244,154,0.4);
+    }
+    .nav-back {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 14px; color: var(--muted);
+      padding: 7px 14px; border-radius: 8px;
+      transition: color 0.15s;
+    }
+    .nav-back:hover { color: var(--text); }
+
+    /* ── PAGE HEADER ─────────────────────────────── */
+    .page-header {
+      padding: 120px 80px 60px;
+      max-width: 1100px; margin: 0 auto;
+      text-align: center;
+    }
+    .page-label {
+      font-size: 12px; font-weight: 600; color: var(--mint);
+      letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 14px;
+    }
+    .page-title {
+      font-size: clamp(36px, 5vw, 58px);
+      font-weight: 800; letter-spacing: -0.04em;
+      line-height: 1.08; margin-bottom: 18px;
+    }
+    .page-sub { font-size: 18px; color: var(--muted); }
+
+    /* ── BROWSER TABS ────────────────────────────── */
+    .tabs-wrap {
+      max-width: 1100px; margin: 0 auto;
+      padding: 0 80px 80px;
+    }
+    .tabs {
+      display: flex; gap: 2px;
+      background: var(--surf);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 5px; margin-bottom: 32px;
+      overflow-x: auto;
+    }
+    .tab {
+      flex: 1; min-width: 0;
+      display: flex; align-items: center; justify-content: center; gap: 7px;
+      padding: 10px 16px; border-radius: 10px;
+      font-size: 14px; font-weight: 600; color: var(--muted);
+      cursor: pointer; border: none; background: transparent;
+      transition: all 0.15s; white-space: nowrap;
+    }
+    .tab:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+    .tab.active {
+      background: var(--bg); color: var(--text);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .tab-dot {
+      width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+    }
+    .tab.active .tab-dot { box-shadow: 0 0 6px currentColor; }
+
+    /* ── CONTENT PANELS ──────────────────────────── */
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* Primary install card */
+    .install-card {
+      background: var(--surf);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+    .install-card-header {
+      padding: 28px 32px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 16px; flex-wrap: wrap;
+    }
+    .install-card-info { display: flex; align-items: center; gap: 16px; }
+    .install-browser-icon {
+      width: 48px; height: 48px; border-radius: 13px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .install-browser-name { font-size: 20px; font-weight: 800; letter-spacing: -0.03em; }
+    .install-browser-sub  { font-size: 13px; color: var(--muted); margin-top: 2px; }
+    .install-store-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 22px; border-radius: 11px;
+      background: var(--mint); color: #060D08;
+      font-size: 14px; font-weight: 700;
+      transition: all 0.16s; flex-shrink: 0;
+      box-shadow: 0 2px 12px rgba(61,244,154,0.25);
+    }
+    .install-store-btn:hover {
+      background: #52F7A5;
+      box-shadow: 0 4px 20px rgba(61,244,154,0.4);
+      transform: translateY(-1px);
+    }
+    .install-store-btn.ghost {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+      box-shadow: none;
+    }
+    .install-store-btn.ghost:hover {
+      background: var(--surf2);
+      box-shadow: none;
+    }
+
+    /* Steps */
+    .steps-list {
+      padding: 28px 32px;
+      display: flex; flex-direction: column; gap: 0;
+    }
+    .install-step {
+      display: flex; gap: 18px;
+      padding: 16px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .install-step:last-child { border-bottom: none; padding-bottom: 0; }
+    .step-num-badge {
+      width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+      background: var(--mint-dim);
+      border: 1px solid rgba(61,244,154,0.2);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono); font-size: 11px; font-weight: 500;
+      color: var(--mint); margin-top: 1px;
+    }
+    .step-text { flex: 1; }
+    .step-text strong { font-weight: 600; color: var(--text); display: block; margin-bottom: 2px; }
+    .step-text span { font-size: 13px; color: var(--muted); line-height: 1.6; }
+    .step-code {
+      display: inline-flex; align-items: center;
+      font-family: var(--mono); font-size: 12px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      padding: 2px 8px; border-radius: 5px; color: var(--mint);
+      margin-top: 4px; word-break: break-all;
+    }
+
+    /* Note card */
+    .note-card {
+      background: var(--mint-dim);
+      border: 1px solid rgba(61,244,154,0.15);
+      border-radius: 12px;
+      padding: 16px 20px;
+      display: flex; gap: 12px; align-items: flex-start;
+    }
+    .note-card svg { flex-shrink: 0; margin-top: 2px; }
+    .note-text { font-size: 13px; color: var(--muted); line-height: 1.65; }
+    .note-text strong { color: var(--mint); }
+
+    /* Manual install */
+    .manual-section {
+      max-width: 1100px; margin: 0 auto;
+      padding: 0 80px 80px;
+    }
+    .manual-title {
+      font-size: 22px; font-weight: 800;
+      letter-spacing: -0.03em; margin-bottom: 6px;
+    }
+    .manual-sub { font-size: 14px; color: var(--muted); margin-bottom: 24px; }
+    .code-block {
+      background: var(--surf);
+      border: 1px solid var(--border);
+      border-radius: 12px; padding: 20px 24px;
+      font-family: var(--mono); font-size: 13px;
+      color: #94A3B8; line-height: 1.8; overflow-x: auto;
+    }
+    .code-block .comment { color: var(--faint); }
+    .code-block .cmd     { color: var(--mint); }
+
+    /* FAQ */
+    .faq-section {
+      max-width: 1100px; margin: 0 auto;
+      padding: 0 80px 100px;
+    }
+    .faq-title {
+      font-size: 22px; font-weight: 800;
+      letter-spacing: -0.03em; margin-bottom: 24px;
+    }
+    .faq-grid { display: flex; flex-direction: column; gap: 2px; }
+    .faq-item {
+      background: var(--surf);
+      border: 1px solid var(--border);
+      border-radius: 0; padding: 22px 28px;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .faq-item:first-child { border-radius: 14px 14px 0 0; }
+    .faq-item:last-child  { border-radius: 0 0 14px 14px; }
+    .faq-item:hover { background: var(--surf2); }
+    .faq-q {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 16px; font-weight: 600; font-size: 15px;
+    }
+    .faq-icon { color: var(--muted); flex-shrink: 0; transition: transform 0.2s; }
+    .faq-item.open .faq-icon { transform: rotate(45deg); }
+    .faq-a {
+      font-size: 14px; color: var(--muted); line-height: 1.7;
+      margin-top: 12px; display: none;
+    }
+    .faq-item.open .faq-a { display: block; }
+
+    /* FOOTER */
+    .footer-wrap {
+      border-top: 1px solid var(--border);
+    }
+    footer {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 40px 80px;
+      max-width: 1100px; margin: 0 auto;
+    }
+    .footer-logo {
+      display: flex; align-items: center; gap: 8px;
+      font-weight: 700; font-size: 15px; letter-spacing: -0.02em;
+    }
+    .footer-link { font-size: 14px; color: var(--faint); transition: color 0.15s; }
+    .footer-link:hover { color: var(--muted); }
+    .footer-copy { font-size: 13px; color: var(--faint); }
+
+    /* RESPONSIVE */
+    @media (max-width: 860px) {
+      nav { padding: 0 20px; }
+      .page-header { padding: 100px 24px 48px; }
+      .tabs-wrap  { padding: 0 24px 60px; }
+      .tabs { border-radius: 11px; }
+      .tab  { padding: 9px 12px; font-size: 13px; }
+      .install-card-header { padding: 22px 20px 18px; }
+      .steps-list { padding: 20px; }
+      .manual-section { padding: 0 24px 60px; }
+      .faq-section    { padding: 0 24px 80px; }
+      footer { flex-direction: column; gap: 20px; padding: 36px 24px; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="nav-logo">
+    <span class="nav-logo-dot"></span>
+    PaperSeek
+  </a>
+  <a href="index.html" class="nav-back">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    Back to home
+  </a>
+</nav>
+
+<div class="page-header">
+  <div class="page-label">Get started</div>
+  <h1 class="page-title">Install PaperSeek</h1>
+  <p class="page-sub">Pick your browser and follow the steps. Takes under a minute.</p>
+</div>
+
+<div class="tabs-wrap">
+
+  <!-- TABS -->
+  <div class="tabs" role="tablist">
+    <button class="tab active" data-tab="chrome" role="tab">
+      <span class="tab-dot" style="color:#4D90FE;background:#4D90FE"></span>Chrome
+    </button>
+    <button class="tab" data-tab="firefox" role="tab">
+      <span class="tab-dot" style="color:#FF9500;background:#FF9500"></span>Firefox
+    </button>
+    <button class="tab" data-tab="edge" role="tab">
+      <span class="tab-dot" style="color:#0078D4;background:#0078D4"></span>Edge
+    </button>
+    <button class="tab" data-tab="brave" role="tab">
+      <span class="tab-dot" style="color:#FB542B;background:#FB542B"></span>Brave
+    </button>
+    <button class="tab" data-tab="opera" role="tab">
+      <span class="tab-dot" style="color:#FF1B2D;background:#FF1B2D"></span>Opera
+    </button>
+    <button class="tab" data-tab="safari" role="tab">
+      <span class="tab-dot" style="color:#006CFF;background:#006CFF"></span>Safari
+    </button>
+  </div>
+
+  <!-- CHROME -->
+  <div class="panel active" id="panel-chrome">
+    <div class="install-card">
+      <div class="install-card-header">
+        <div class="install-card-info">
+          <div class="install-browser-icon" style="background:rgba(77,144,254,0.1)">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#4D90FE" stroke-width="1.5" fill="none"/><circle cx="12" cy="12" r="4" fill="#4D90FE"/><path d="M12 2a10 10 0 0 1 8.66 5H3.34A10 10 0 0 1 12 2z" fill="#4D90FE" opacity="0.5"/></svg>
+          </div>
+          <div>
+            <div class="install-browser-name">Google Chrome</div>
+            <div class="install-browser-sub">Silent PDF download via Chrome Web Store</div>
+          </div>
+        </div>
+        <a href="https://chrome.google.com/webstore" target="_blank" class="install-store-btn">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Add to Chrome
+        </a>
+      </div>
+      <div class="steps-list">
+        <div class="install-step">
+          <div class="step-num-badge">1</div>
+          <div class="step-text"><strong>Click "Add to Chrome" above</strong><span>You'll be taken to the PaperSeek listing on the Chrome Web Store.</span></div>
+        </div>
+        <div class="install-step">
+          <div class="step-num-badge">2</div>
+          <div class="step-text"><strong>Confirm the install</strong><span>Click "Add extension" in the confirmation dialog that appears.</span></div>
+        </div>
+        <div class="install-step">
+          <div class="step-num-badge">3</div>
+          <div class="step-text"><strong>Open DeepSeek</strong><span>Navigate to <span class="step-code">chat.deepseek.com</span> — the PaperSeek toolbar appears automatically at the bottom-right.</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="note-card">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3DF49A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <p class="note-text"><strong>Silent auto-download:</strong> On Chrome, clicking Export PDF silently downloads the file to your default downloads folder — no print dialog, no extra steps.</p>
+    </div>
+  </div>
+
+  <!-- FIREFOX -->
+  <div class="panel" id="panel-firefox">
+    <div class="install-card">
+      <div class="install-card-header">
+        <div class="install-card-info">
+          <div class="install-browser-icon" style="background:rgba(255,149,0,0.1)">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#FF9500" opacity="0.15"/><path d="M12 7v5l3 3" stroke="#FF9500" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <div>
+            <div class="install-browser-name">Mozilla Firefox</div>
+            <div class="install-browser-sub">PDF via system print dialog</div>
+          </div>
+        </div>
+        <a href="https://addons.mozilla.org" target="_blank" class="install-store-btn">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Add to Firefox
+        </a>
+      </div>
+      <div class="steps-list">
+        <div class="install-step">
+          <div class="step-num-badge">1</div>
+          <div class="step-text"><strong>Click "Add to Firefox" above</strong><span>This takes you to the Firefox Add-ons listing.</span></div>
+        </div>
+        <div class="install-step">
+          <div class="step-num-badge">2</div>
+          <div class="step-text"><strong>Confirm the install</strong><span>Click "Add" in the Firefox permission dialog.</span></div>
+        </div>
+        <div class="install-step">
+          <div class="step-num-badge">3</div>
+          <div class="step-text"><strong>Open DeepSeek and export</strong><span>When you click Export PDF, Firefox opens the system print dialog. Choose <strong>Save as PDF</strong> as the destination.</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="note-card">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3DF49A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <p class="note-text"><strong>Print dialog tip:</strong> In Firefox's print dialog, set Destination to "Save to PDF", choose your paper size and orientation, then click Save.</p>
+    </div>
+  </div>
+
+  <!-- EDGE -->
+  <div class="panel" id="panel-edge">
+    <div class="install-card">
+      <div class="install-card-header">
+        <div class="install-card-info">
+          <div class="install-browser-icon" style="background:rgba(0,120,212,0.1)">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#0078D4" opacity="0.15"/><circle cx="12" cy="12" r="5" fill="#0078D4" opacity="0.6"/></svg>
+          </div>
+          <div>
+            <div class="install-browser-name">Microsoft Edge</div>
+            <div class="install-browser-sub">Silent PDF download — Chrome extensions supported</div>
+          </div>
+        </div>
+        <a href="https://chrome.google.com/webstore" target="_blank" class="install-store-btn">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Add to Edge
+        </a>
+      </div>
+      <div class="steps-list">
+        <div class="install-step">
+          <div class="step-num-badge">1</div>
+          <div class="step-text"><strong>Enable Chrome extensions in Edge</strong><span>Go to <span class="step-code">edge://extensions</span> → toggle <strong>Allow extensions from other stores</strong>.</span></div>
+        </div>
+        <div class="install-step">
+          <div class="step-num-badge">2</div>
+          <div class="step-text"><strong>Add from the Chrome Web Store</strong><span>Click "Add to Edge" above — Edge will open the Chrome Web Store and prompt you to install.</span></div>
+        </div>
+        <div class="install-step">
+          <div class="step-num-badge">3</div>
+          <div class="step-text"><strong>Open DeepSeek</strong><span>The toolbar appears automatically. PDF exports are silent and automatic, just like Chrome.</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BRAVE -->
+  <div class="panel" id="panel-brave">
+    <div class="install-card">
+      <div class="install-card-header">
+        <div class="install-card-info">
+          <div class="install-browser-icon" style="background:rgba(251,84,43,0.1)">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#FB542B" opacity="0.15"/><path d="M8 8l8 8M16 8l-8 8" stroke="#FB542B" stroke-width="2.5" stroke-linecap="round"/></svg>
+          </div>
+          <div>
+            <div class="install-browser-name">Brave</div>
+            <div class="install-browser-sub">Silent PDF download — Chrome Web Store compatible</div>
+          </div>
+        </div>
+        <a href="https://chrome.google.com/webstore" target="_blank" class="install-store-btn">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Add to Brave
+        </a>
+      </div>
+      <div class="steps-list">
+        <div class="install-step">
+          <div class="step-num-badge">1</div>
+          <div class="step-text"><strong>Click "Add to Brave" above</strong><span>Brave is fully compatible with the Chrome Web Store — no extra steps needed.</span></div>
+        </div>
+        <div class="install-step">
+          <div class="step-num-badge">2</div>
+          <div class="step-text"><strong>Confirm the install</strong><span>Click "Add extension" in the confirmation dialog.</span></div>
+        </div>
+        <div class="install-step">
+          <div class="step-num-badge">3</div>
+          <div class="step-text"><strong>Open DeepSeek</strong><span>Navigate to <span class="step-code">chat.deepseek.com</span> — the toolbar appears at the bottom-right of every chat.</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OPERA -->
+  <div class="panel" id="panel-opera">
+    <div class="install-card">
+      <div class="install-card-header">
+        <div class="install-card-info">
+          <div class="install-browser-icon" style="background:rgba(255,27,45,0.1)">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#FF1B2D" opacity="0.15"/><circle cx="12" cy="12" r="5" fill="#FF1B2D" opacity="0.6"/></svg>
+          </div>
+          <div>
+            <div class="install-browser-name">Opera</div>
+            <div class="install-browser-sub">Silent PDF download — requires Install Chrome Extensions add-on</div>
+          </div>
+        </div>
+        <a href="https://chrome.google.com/webstore" target="_blank" class="install-store-btn">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Add to Opera
+        </a>
+      </div>
+      <div class="steps-list">
+        <div class="install-step">
+          <div class="step-num-badge">1</div>
+          <div class="step-text"><strong>Install "Install Chrome Extensions" for Opera</strong><span>Search for it in the Opera Add-ons store — this lets Opera install Chrome Web Store extensions.</span></div>
+        </div>
+        <div class="install-step">
+          <div class="step-num-badge">2</div>
+          <div class="step-text"><strong>Add PaperSeek from the Chrome Web Store</strong><span>Click "Add to Opera" above and follow the prompt.</span></div>
+        </div>
+        <div class="install-step">
+          <div class="step-num-badge">3</div>
+          <div class="step-text"><strong>Open DeepSeek</strong><span>The toolbar appears at the bottom-right. PDF exports download silently.</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SAFARI -->
+  <div class="panel" id="panel-safari">
+    <div class="install-card">
+      <div class="install-card-header">
+        <div class="install-card-info">
+          <div class="install-browser-icon" style="background:rgba(0,108,255,0.1)">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#006CFF" opacity="0.15"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4" stroke="#006CFF" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <div>
+            <div class="install-browser-name">Safari</div>
+            <div class="install-browser-sub">Load unpacked — print dialog for PDF</div>
+          </div>
+        </div>
+        <a href="https://github.com/mahtamun-hoque-fahim/deepseek-exporter" target="_blank" class="install-store-btn ghost">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+          Download source
+        </a>
+      </div>
+      <div class="steps-list">
+        <div class="install-step">
+          <div class="step-num-badge">1</div>
+          <div class="step-text"><strong>Enable Safari extension development</strong><span>Open Safari → Preferences → Advanced → check <strong>Show Develop menu</strong>.</span></div>
+        </div>
+        <div class="install-step">
+          <div class="step-num-badge">2</div>
+          <div class="step-text"><strong>Download the source</strong><span>Click "Download source" above and unzip the folder somewhere permanent on your Mac.</span></div>
+        </div>
+        <div class="install-step">
+          <div class="step-num-badge">3</div>
+          <div class="step-text"><strong>Convert with Xcode</strong><span>Run <span class="step-code">xcrun safari-web-extension-converter /path/to/deepseek-exporter</span> in Terminal. Xcode will open with a generated project.</span></div>
+        </div>
+        <div class="install-step">
+          <div class="step-num-badge">4</div>
+          <div class="step-text"><strong>Build and allow unsigned extensions</strong><span>In Xcode, press Run. Then in Safari → Develop → Allow Unsigned Extensions, and enable PaperSeek.</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="note-card">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3DF49A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <p class="note-text">Safari requires re-enabling unsigned extensions each time you restart Safari. For a permanent install, you'd need an Apple Developer account to sign the extension.</p>
+    </div>
+  </div>
+</div>
+
+<!-- MANUAL INSTALL (developer mode) -->
+<div class="manual-section">
+  <h2 class="manual-title">Load unpacked (all Chromium browsers)</h2>
+  <p class="manual-sub">For developers or if you prefer not to use a store.</p>
+  <div class="code-block">
+    <span class="comment"># 1. Clone the repo</span><br>
+    <span class="cmd">git clone https://github.com/mahtamun-hoque-fahim/deepseek-exporter.git</span><br><br>
+    <span class="comment"># 2. Open your browser's extension page</span><br>
+    <span class="cmd">chrome://extensions/</span>  <span class="comment"># Chrome / Brave / Opera</span><br>
+    <span class="cmd">edge://extensions/</span>     <span class="comment"># Edge</span><br><br>
+    <span class="comment"># 3. Enable Developer Mode (top-right toggle)</span><br>
+    <span class="comment"># 4. Click "Load unpacked" → select the cloned folder</span><br>
+    <span class="comment"># 5. Open chat.deepseek.com — done.</span>
+  </div>
+</div>
+
+<!-- FAQ -->
+<div class="faq-section">
+  <h2 class="faq-title">Common questions</h2>
+  <div class="faq-grid">
+    <div class="faq-item">
+      <div class="faq-q">
+        Does PaperSeek read my chat messages?
+        <svg class="faq-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </div>
+      <div class="faq-a">No. The extension reads your chat DOM locally to select elements for printing. Nothing is uploaded or sent to any server — not our servers, not DeepSeek's, not anyone else's.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">
+        Why does it need the "debugger" permission?
+        <svg class="faq-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </div>
+      <div class="faq-a">Chrome's <code>Page.printToPDF</code> command — the only way to silently download a full page as a high-quality PDF without a print dialog — requires attaching Chrome's debugger to the tab. It's attached only during the export, and detached immediately after. No other debugger functionality is used.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">
+        Why does Firefox show a print dialog?
+        <svg class="faq-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </div>
+      <div class="faq-a">Firefox doesn't expose the Chrome DevTools Protocol (<code>Page.printToPDF</code>), so we fall back to <code>window.print()</code>. In the dialog, set Destination to "Save to PDF" to get your file. The toolbar and UI chrome are hidden automatically during printing.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">
+        Is it free? Will it stay free?
+        <svg class="faq-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </div>
+      <div class="faq-a">Yes, and yes. PaperSeek is fully open-source under MIT. There's no subscription, no premium tier, no ads. Fork it, modify it, use it forever.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">
+        The toolbar isn't showing up. What do I do?
+        <svg class="faq-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </div>
+      <div class="faq-a">Make sure you're on <code>chat.deepseek.com</code> (not a different subdomain). Try a hard refresh (Ctrl+Shift+R). If the extension was just installed, navigate away and back to the chat page. If it still doesn't appear, <a href="https://github.com/mahtamun-hoque-fahim/deepseek-exporter/issues" target="_blank" style="color:var(--mint)">open an issue on GitHub</a>.</div>
+    </div>
+  </div>
+</div>
+
+<div class="footer-wrap">
+  <footer>
+    <div class="footer-logo">
+      <span class="nav-logo-dot"></span>
+      PaperSeek
+    </div>
+    <div style="display:flex;gap:24px">
+      <a href="index.html" class="footer-link">Home</a>
+      <a href="https://github.com/mahtamun-hoque-fahim/deepseek-exporter" target="_blank" class="footer-link">GitHub</a>
+      <a href="https://github.com/mahtamun-hoque-fahim/deepseek-exporter/issues" target="_blank" class="footer-link">Report a bug</a>
+    </div>
+    <span class="footer-copy">Built by Fahim</span>
+  </footer>
+</div>
+
+<script>
+  // Tab switcher
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+    });
+  });
+
+  // FAQ accordion
+  document.querySelectorAll('.faq-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const isOpen = item.classList.contains('open');
+      document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('open'));
+      if (!isOpen) item.classList.add('open');
+    });
+  });
+</script>
+</body>
+</html>
