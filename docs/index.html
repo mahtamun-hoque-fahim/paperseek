@@ -57,14 +57,11 @@
       border-bottom: 1px solid var(--border);
     }
     .nav-logo {
-      display: flex; align-items: center; gap: 10px;
+      display: flex; align-items: center; gap: 9px;
       font-weight: 700; font-size: 17px; letter-spacing: -0.03em;
     }
-    .nav-logo-dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: var(--mint);
-      box-shadow: 0 0 8px var(--mint-glow);
-    }
+    .nav-logo-mark { width: 24px; height: 24px; flex-shrink: 0; }
+    .nav-logo-mark svg { display: block; width: 100%; height: 100%; }
     .nav-links {
       display: flex; align-items: center; gap: 8px;
     }
@@ -482,7 +479,7 @@
 <!-- NAV -->
 <nav>
   <a href="/" class="nav-logo">
-    <span class="nav-logo-dot"></span>
+    <span class="nav-logo-mark"><svg width="89" height="89" viewBox="0 0 89 89" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M60.1025 13C65.9514 13 71.2381 15.3623 75.1748 19.1865C78.9988 23.1231 81.3612 28.4093 81.3613 34.2578C81.3613 42.9186 76.187 50.3426 68.876 53.6045C66.9639 54.5043 64.9388 55.1793 62.8018 55.4043H62.127V55.5166L30.1455 55.4209C26.6135 55.4104 23.3371 57.2638 21.5273 60.2969L10.5 78.7793V27.4004C11.5949 27.7875 12.7725 28 14 28C19.799 28 24.5 23.299 24.5 17.5C24.5 15.8894 24.1363 14.364 23.4883 13H60.1025ZM24.4473 31.5693C24.4473 37.0922 28.9244 41.5693 34.4473 41.5693H60.1025C61.1148 41.5693 62.1275 41.3444 63.0273 40.8945C65.7267 39.6572 67.3008 37.1822 67.3008 34.2578C67.3006 31.6711 65.9514 29.9838 65.1641 29.084C64.2642 28.1842 62.5769 27.0596 60.1025 27.0596H24.4473V31.5693Z" fill="white"/><path d="M14 9C18.4183 9 22 12.5817 22 17C22 21.4183 18.4183 25 14 25C9.58172 25 6 21.4183 6 17C6 12.5817 9.58172 9 14 9Z" fill="white"/></svg></span>
     PaperSeek
   </a>
   <div class="nav-links">
@@ -748,7 +745,7 @@
 <div class="divider"><hr></div>
 <footer>
   <div class="footer-logo">
-    <span class="nav-logo-dot"></span>
+    <span class="nav-logo-mark"><svg width="89" height="89" viewBox="0 0 89 89" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M60.1025 13C65.9514 13 71.2381 15.3623 75.1748 19.1865C78.9988 23.1231 81.3612 28.4093 81.3613 34.2578C81.3613 42.9186 76.187 50.3426 68.876 53.6045C66.9639 54.5043 64.9388 55.1793 62.8018 55.4043H62.127V55.5166L30.1455 55.4209C26.6135 55.4104 23.3371 57.2638 21.5273 60.2969L10.5 78.7793V27.4004C11.5949 27.7875 12.7725 28 14 28C19.799 28 24.5 23.299 24.5 17.5C24.5 15.8894 24.1363 14.364 23.4883 13H60.1025ZM24.4473 31.5693C24.4473 37.0922 28.9244 41.5693 34.4473 41.5693H60.1025C61.1148 41.5693 62.1275 41.3444 63.0273 40.8945C65.7267 39.6572 67.3008 37.1822 67.3008 34.2578C67.3006 31.6711 65.9514 29.9838 65.1641 29.084C64.2642 28.1842 62.5769 27.0596 60.1025 27.0596H24.4473V31.5693Z" fill="white"/><path d="M14 9C18.4183 9 22 12.5817 22 17C22 21.4183 18.4183 25 14 25C9.58172 25 6 21.4183 6 17C6 12.5817 9.58172 9 14 9Z" fill="white"/></svg></span>
     PaperSeek
   </div>
   <div class="footer-links">
